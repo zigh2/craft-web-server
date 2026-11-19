@@ -1,0 +1,66 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]   # main is tested by the Release workflow
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ruff
+        run: pip install ruff && ruff check .
+      - name: Dashboard JavaScript syntax
+        run: for f in craftweb/dashboard/*.js; do node --check "$f"; done
+      - name: ShellCheck
+        run: shellcheck -S warning .github/scripts/*.sh *.sh
+      - name: VERSION / CHANGELOG consistency
+        run: |
+          v=$(tr -d ' \r\n' < VERSION)
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::VERSION must be X.Y.Z"; exit 1; }
+          grep -q "^## $v\b" CHANGELOG.md || echo "::warning::CHANGELOG.md has no section for $v"
+
+  test:
+    name: Test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  python: "3.9" }
+          - { os: ubuntu-latest,  python: "3.11" }
+          - { os: ubuntu-latest,  python: "3.13" }
+          - { os: windows-latest, python: "3.9" }
+          - { os: windows-latest, python: "3.13" }
+          - { os: macos-latest,   python: "3.12" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t craft-web-server:ci .
+      - name: Smoke test
+        run: |
+          docker run -d --name cws -p 8080:8080 craft-web-server:ci
+          for i in $(seq 1 20); do curl -fsS localhost:8080/health && exit 0; sleep 1; done
+          docker logs cws; exit 1

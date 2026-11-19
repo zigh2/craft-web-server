@@ -1,0 +1,164 @@
+name: Release
+# Every push to main is tested and published as a new GitHub release:
+#   craft-web-server-vX.Y.Z.zip / .tar.gz + SHA256SUMS (with build provenance),
+#   a Windows build without Python, and a multi-arch Docker image on GHCR.
+# A package dropped into incoming/ is applied first (see incoming/README.md).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/dependabot.yml"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Cut a release now by bumping the latest tag"
+        type: choice
+        options: [none, patch, minor, major]
+        default: none
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Test and version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags are needed to choose the next version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply incoming package (if any)
+        run: bash .github/scripts/apply_incoming.sh
+      - name: Test
+        run: python -m unittest discover -s tests -v
+      - name: Commit the applied update
+        id: commit
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Apply incoming package v$(tr -d ' \r\n' < VERSION)"
+            git push
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Choose the version
+        id: version
+        run: echo "version=$(bash .github/scripts/next_version.sh '${{ inputs.bump || 'none' }}')" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Publish release v${{ needs.prepare.outputs.version }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write       # build provenance
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Build packages
+        run: bash .github/scripts/build_package.sh "${{ needs.prepare.outputs.version }}"
+      - name: Attest build provenance
+        continue-on-error: true   # not available for private repositories on every plan
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/craft-web-server-v*
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          bash .github/scripts/release_notes.sh "$VERSION" "${{ github.repository }}" > notes.md
+          gh release create "v$VERSION" dist/craft-web-server-v* dist/SHA256SUMS \
+            --title "Craft Web Server v$VERSION" \
+            --notes-file notes.md --generate-notes \
+            --target "${{ needs.prepare.outputs.sha }}" --latest
+
+  windows-exe:
+    name: Windows build (no Python needed)
+    needs: [prepare, release]
+    runs-on: windows-latest
+    continue-on-error: true      # an optional extra must never block a release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          echo "$VERSION" > VERSION
+          pip install "pyinstaller>=6,<7"
+          pyinstaller --noconfirm --onefile --name craft-web-server \
+            --add-data "craftweb/dashboard;craftweb/dashboard" --add-data "VERSION;." run.py
+          ./dist/craft-web-server.exe version
+          ./dist/craft-web-server.exe serve --help > /dev/null
+      - name: Package and upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          name="craft-web-server-v$VERSION-windows-x64"
+          mkdir "$name" && cp dist/craft-web-server.exe LICENSE README.md "$name/"
+          7z a "$name.zip" "$name" > /dev/null
+          sha256sum "$name.zip" > "$name.zip.sha256"
+          gh release upload "v$VERSION" "$name.zip" "$name.zip.sha256" --clobber
+
+  docker:
+    name: Docker image (GHCR)
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - run: echo "${{ needs.prepare.outputs.version }}" > VERSION
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
