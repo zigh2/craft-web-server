@@ -77,7 +77,7 @@ jobs:
         run: bash .github/scripts/build_package.sh "${{ needs.prepare.outputs.version }}"
       - name: Attest build provenance
         continue-on-error: true   # not available for private repositories on every plan
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/craft-web-server-v*
       - name: Create the release
