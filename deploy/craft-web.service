@@ -1,0 +1,14 @@
+# sudo cp deploy/craft-web.service /etc/systemd/system/
+# edit User and paths, then: sudo systemctl enable --now craft-web
+[Unit]
+Description=Craft Apps web server
+After=network.target
+
+[Service]
+User=craftweb
+WorkingDirectory=/opt/craft-web-server
+ExecStart=/usr/bin/python3 /opt/craft-web-server/server.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

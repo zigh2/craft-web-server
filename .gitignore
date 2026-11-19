@@ -1,0 +1,21 @@
+# runtime data - never commit
+root/*
+!root/.gitkeep
+downloads/*
+!downloads/.gitkeep
+state.json
+*.tmp
+certs/
+.env
+
+__pycache__/
+*.pyc
+
+# secrets and runtime files
+admin.json
+logs/
+inbox/
+cache/
+dist/
+build/
+*.spec

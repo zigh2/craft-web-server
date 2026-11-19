@@ -1,0 +1,8 @@
+* text=auto
+*.sh text eol=lf
+*.bat text eol=crlf
+# not part of the release package
+.github export-ignore
+incoming export-ignore
+.gitattributes export-ignore
+.dockerignore export-ignore

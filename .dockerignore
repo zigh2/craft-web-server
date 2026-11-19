@@ -1,0 +1,13 @@
+.git
+.github
+tests
+root
+cache
+inbox
+downloads
+logs
+dist
+incoming
+state.json
+admin.json
+**/__pycache__

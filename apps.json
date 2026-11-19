@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "server_name": "Craft Apps",
+    "host": "0.0.0.0",
+    "port": 8080,
+    "auto_discover": true,
+    "backup_count": 3,
+    "cross_origin_isolation": false
+  },
+  "apps": [
+    {
+      "id": "pdfcraft",
+      "title": "PDF Craft",
+      "folder_prefix": "pdfcraft-web-",
+      "repo": "storytold/pdfcraft",
+      "asset_pattern": "^pdfcraft-web-.*\\.zip$",
+      "index_path": "index.html",
+      "description": "PDF editor and tools",
+      "icon": "📄",
+      "enabled": true,
+      "prerelease": false
+    },
+    {
+      "id": "figcraft",
+      "title": "Fig Craft",
+      "folder_prefix": "figcraft-web-",
+      "repo": "storytold/figcraft",
+      "asset_pattern": ".*web.*\\.zip$",
+      "index_path": "index.html",
+      "description": "Graphics editor",
+      "icon": "🎨",
+      "enabled": true,
+      "prerelease": false
+    }
+  ]
+}

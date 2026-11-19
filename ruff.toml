@@ -1,0 +1,7 @@
+line-length = 120
+target-version = "py39"
+extend-exclude = ["dist"]
+
+[lint]
+# ruff's defaults (pyflakes + the safest pycodestyle rules) plus import sorting is left off on purpose
+select = ["E4", "E7", "E9", "F"]
