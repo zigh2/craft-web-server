@@ -3,7 +3,7 @@
 [![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 [![Release](../../actions/workflows/release.yml/badge.svg)](../../actions/workflows/release.yml)
 [![CodeQL](../../actions/workflows/codeql.yml/badge.svg)](../../actions/workflows/codeql.yml)
-[![Latest release](https://img.shields.io/github/v/release/OWNER/craft-web-server)](../../releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/zigh2/craft-web-server)](../../releases/latest)
 
 خادم ويب خفيف لتشغيل تطبيقات **Craft** (PDF Craft وFig Craft وغيرها) داخل شبكة محلية، مع **لوحة تحكم** احترافية لتثبيتها وتحديثها والرجوع لنسخ سابقة.
 
@@ -24,19 +24,24 @@
 
 ثم افتح لوحة التحكم (يُطبع عنوانها عند التشغيل) وسجّل الدخول.
 > ويندوز: اسمح بالمنفذين في الجدار الناري:
-> `netsh advfirewall firewall add rule name="Craft Apps" dir=in action=allow protocol=TCP localport=8080,8081`
+> `netsh advfirewall firewall add rule name="Craft Apps" dir=in action=allow protocol=TCP localport=8080,8081,8100-8199`
 
-## عندك ملفات web منزّلة مسبقاً؟
+## عندك ملفات web منزّلة مسبقاً؟ (بدون أي إعداد)
 
-لا تنزّلها مرة أخرى:
+لا تعرّف التطبيقات ولا تنزّل شيئاً: يكفي أن يحوي اسم كل ملف **اسم التطبيق + رقم الإصدار**، مثل
+`lesson-builder-web-v1.2.0.zip` أو `Quran_Tools_2.3.zip`. التطبيقات تُكتشف وتُنشأ تلقائياً، وتُجمَّع الملفات لكل تطبيق.
 
-1. **من اللوحة**: نظرة عامة ← **استيراد ملفات منزّلة** ← اختر عدة ملفات zip معاً. تُطابَق بالاسم (`pdfcraft-web-v1.2.0.zip`)
-   ويمكنك تصحيح التطبيق/النسخة يدوياً قبل الاستيراد.
+1. **من اللوحة**: نظرة عامة ← **استيراد ملفات منزّلة** ← اختر كل الملفات دفعة واحدة. ترى جدولاً فيه التطبيق والنسخة المكتشفان
+   (التطبيقات الجديدة محدَّدة مسبقاً بعلامة «＋») ويمكنك تصحيح أي سطر قبل الضغط على «استيراد».
 2. **من سطر الأوامر** (مجلد على قرص الخادم): `python updater.py --import D:\downloads`
-   (يقبل ملفات zip ومجلدات مفكوكة؛ `--app pdfcraft` لفرض التطبيق إن لم يطابق الاسم).
-3. أو انسخ الملفات إلى مجلد **`inbox/`** فتُثبَّت تلقائياً.
+   (يقبل zip ومجلدات مفكوكة؛ `--app NAME` لفرض تطبيق، `--no-create` لمنع إنشاء تطبيقات جديدة).
+3. أو انسخ الملفات إلى مجلد **`inbox/`** فتُنشأ التطبيقات وتُثبَّت تلقائياً.
 
-القواعد: النسخة الأحدث تُفعَّل، ولا تُخفَّض النسخة الفعّالة أبداً، ولا يُفكّ إلا ما يتسع له `backup_count`، لكن **كل ملف يُحفظ في الكاش** ويمكن تثبيته لاحقاً بنقرة.
+كيف يُقرأ الاسم؟ `pdfcraft-web-v1.2.0.zip` ← التطبيق `pdfcraft`، البادئة `pdfcraft-web-`، النسخة `v1.2.0`.
+الاسم نفسه بفواصل أو حروف مختلفة (`FigCraft_Web_2.0.zip`) يُضم إلى التطبيق الموجود ولا يُكرَّر. ملف بلا رقم إصدار (`notes.zip`) يُتجاوز.
+التطبيقات المنشأة تلقائياً بلا مستودع GitHub؛ أضف المستودع من «تعديل» إن أردت فحص التحديثات.
+
+قواعد الاستيراد: النسخة الأحدث تُفعَّل، ولا تُخفَّض النسخة الفعّالة أبداً، ولا يُفكّ إلا ما يتسع له `backup_count`، لكن **كل ملف يُحفظ في الكاش** ويمكن تثبيته لاحقاً بنقرة.
 
 ## لوحة التحكم
 
@@ -57,6 +62,28 @@
 - **بدون إنترنت**: رفع ZIP من اللوحة، أو `inbox/`، أو `--import`.
 - مستودعات خاصة أو حدّ GitHub API: اضبط `GITHUB_TOKEN`. الوكيل يُقرأ من `HTTPS_PROXY`.
 
+## تطبيق يبقى على «Loading…» ولا يكتمل؟
+
+السبب الأشهر: تطبيقات الويب المبنية للعمل من **جذر الموقع** تطلب ملفاتها من `/assets/app.js` و`/locales/en.json`،
+بينما تُقدَّم هنا تحت `/اسم-التطبيق/`، فلا تجد ملفاتها وتبقى على التحميل. الحل على **ثلاث طبقات**، أغلبها تلقائي:
+
+1. **وضع التوافق (تلقائي، بلا إعداد)**: أي طلب من الجذر يُوجَّه إلى التطبيق الصحيح بحسب الصفحة التي طلبته (`Referer`)، أو آخر تطبيق فتحتَه في المتصفح (كوكي).
+   يعمل مع إعادة تحميل الصفحة ومسارات الـ SPA العميقة، ولا يستطيع الخروج من مجلد التطبيق. الاستجابات تحمل الترويسة `X-Craft-Compat: root-path`.
+2. **منفذ خاص بالتطبيق (الحل الجذري)**: التطبيق يعمل من `http://SERVER-IP:8100/` فيرى نفسه في الجذر، ويُعزل تخزينه وService Workers عن بقية التطبيقات.
+   فعّله لتطبيق واحد (تعديل ← *تشغيل على منفذ خاص*، أو زر الحل في بطاقة الفحص)، أو **لكل التطبيقات** من الإعدادات ← *التوافق*
+   (`isolate_apps`). تُعطى المنافذ تلقائياً من `app_port_base` (8100) وتُحفظ، ولا تحتاج إعادة تشغيل. **افتح المنافذ 8100 فصاعداً في الجدار الناري.**
+3. **فحص التوافق** (صفحة التطبيق): يقرأ التطبيق المثبّت ويخبرك بسبب المشكلة بدل التخمين:
+   ملفات مفقودة فعلاً في النسخة، مسارات جذرية، **موارد من الإنترنت** (خطوط/CDN: تُعلّق التطبيق على شبكة بلا إنترنت)،
+   ميزات تحتاج HTTPS (`crypto.subtle`, clipboard, Service Worker)، و`SharedArrayBuffer` الذي يحتاج COOP/COEP.
+4. **توطين موارد الإنترنت (يعمل التطبيق بدون إنترنت)**: كثير من التطبيقات تحمّل خطوطاً أو مكتبات من CDN، وعلى شبكة بلا إنترنت يعلق التحميل.
+   بعد كل تثبيت يحمّل الخادم هذه الملفات **مرة واحدة** (وتتبّع ما يستورده ملف CSS من خطوط وملفات فرعية) إلى `cache/vendor/`،
+   ويعدّل التطبيق ليستعمل النسخ المحلية عبر `/_vendor/`. المخزن **مشترك بين كل التطبيقات والنسخ**، فلا يُعاد تنزيل شيء،
+   وتبقى النسخة المحفوظة في الكاش كما هي. يدوياً: زر **جعله يعمل بدون إنترنت** في بطاقة الفحص، أو `python updater.py --localize [--app NAME]`.
+   لخادم بلا إنترنت أبداً: شغّل التوطين على خادم متصل ثم انسخ مجلد `cache/vendor` (وملف `cache/vendor-index.json`) إلى الخادم الآخر.
+   - **أمان**: روابط التوطين تأتي من ملفات طرف ثالث، لذا تُرفض العناوين الخاصة (127.x و192.168.x و169.254.169.254...) والمنافذ غير 80/443 وإعادات التوجيه إليها،
+     مع حدود للحجم والعدد، فلا يمكن لصفحة أن تجعل الخادم يفحص شبكتك. مواقع التحليلات لا تُحمَّل، ومكتبات الوحدات (`esm.sh` وأمثالها) غير مدعومة وتُذكر في السجل.
+   - يُعطَّل بـ `"localize_external": false` (أو من الإعدادات ← التوافق).
+
 ## الأمان
 
 - لوحة التحكم على **منفذ مستقل** (`admin_port`): التطبيق المستضاف يعمل من منفذ آخر (أصل مختلف) فلا يستطيع برمجياً مخاطبة اللوحة بجلسة المدير. المنفذ العام يردّ 404 على `/admin`. (ويمكن ربط اللوحة بـ `127.0.0.1` فقط عبر `admin_host`).
@@ -67,14 +94,32 @@
 - الرفع والتنزيل: حدّ للحجم، فحص zip-slip وقنابل الضغط، فحص مساحة القرص، تحقق SHA-256، ولا يُرسل `GITHUB_TOKEN` لأي نطاق آخر.
 - التفاصيل وسياسة الإبلاغ في [SECURITY.md](SECURITY.md).
 
-### HTTPS
-المتصفحات تعطّل Service Workers وclipboard و`SharedArrayBuffer` على `http://192.168.x.x`، وبعض تطبيقات Craft تحتاجها:
+### HTTPS بأمر واحد
+المتصفحات تعطّل Service Workers وclipboard و`SharedArrayBuffer` و`crypto.subtle` على `http://192.168.x.x`، وبعض تطبيقات Craft تحتاجها.
+لا حاجة لـ openssl ولا mkcert (الكود بـ Python نقي ويعمل داخل exe وDocker):
+
 ```bash
-mkdir certs && mkcert -install
-mkcert -cert-file certs/server.pem -key-file certs/server-key.pem SERVER-IP localhost
-# apps.json -> settings: "tls_cert": "certs/server.pem", "tls_key": "certs/server-key.pem"
+python server.py --setup-https                 # ويندوز: setup-https.bat
+python server.py --setup-https --names craft.lan,192.168.1.20      # أسماء إضافية
 ```
-ثم ثبّت شهادة mkcert (CA) على الأجهزة الأخرى. للتطبيقات التي تحتاج COOP/COEP فعّل `cross_origin_isolation`.
+(أو من اللوحة: الإعدادات ← HTTPS ← *إعداد / تحديث HTTPS*.) ثم **أعد تشغيل الخادم**. يُنشأ في `certs/`:
+مرجع شهادات خاص (`ca.pem`) وشهادة الخادم (`server.pem`) تغطي `localhost` واسم الجهاز وعناوين الشبكة (825 يوماً)، ويُفعَّل HTTPS في `apps.json` تلقائياً.
+الشهادة تُجدَّد تلقائياً عند تغيّر عنوان الجهاز أو قرب انتهائها عند إعادة تشغيل الأمر، **والمرجع نفسه يبقى**.
+
+**الوثوق بالمرجع مرة واحدة فقط على كل جهاز** (لا تحتاج إعادة ذلك عند التجديد). نزّل الشهادة من `https://SERVER-IP:8080/ca.crt` (اقبل التحذير مرة واحدة) ثم:
+
+| النظام | الطريقة |
+|---|---|
+| Windows | `certutil -addstore -f ROOT certs\ca.pem` (كمسؤول) أو انقر مرتين على الملف ← تثبيت ← *Trusted Root* |
+| macOS | `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/ca.pem` |
+| iPhone / iPad | افتح `/ca.crt` ← تثبيت الملف الشخصي ← الإعدادات ← عام ← حول ← إعدادات الوثوق بالشهادات ← فعّله |
+| Android | الإعدادات ← الأمان ← تثبيت شهادة ← شهادة CA |
+| Firefox | الإعدادات ← الخصوصية ← الشهادات ← استيراد (أو `security.enterprise_roots.enabled`) |
+
+**أمان المرجع**: مفتاحه `certs/ca-key.pem` لا يغادر الخادم أبداً (صلاحية 600، ولا يُقدَّم عبر الويب؛ يُقدَّم فقط `ca.crt` العام).
+ولو تسرّب، المرجع **مقيَّد بـ NameConstraints** فلا يستطيع التوقيع إلا لأسماء الشبكة المحلية (`.lan` `.local` `.home` `.internal` و`localhost`
+واسم الجهاز) وعناوين الشبكات الخاصة (بما فيها 100.64/10 لـ Tailscale)، فلا يصلح لانتحال موقع عام على الأجهزة التي تثق به (مُختبَر). إن أردت اسماً خارج ذلك: `--new-ca` (ثم تثق بالمرجع الجديد من جديد).
+عند إيقاف الخادم نهائياً احذف المرجع من الأجهزة. في Docker: `docker compose exec craft-web-server python -m craftweb https` (الملفات في `/data/certs`).
 
 ## الإعدادات (`apps.json` ← `settings`)
 
@@ -90,8 +135,11 @@ mkcert -cert-file certs/server.pem -key-file certs/server-key.pem SERVER-IP loca
 | `auto_update_hours` | 6 | فترة فحص GitHub (0 = إيقاف) |
 | `max_upload_mb` | 1024 | أقصى حجم رفع |
 | `inbox_enabled` | true | مجلد الاستلام التلقائي |
+| `auto_create_apps` | true | إنشاء التطبيقات تلقائياً من أسماء الملفات |
+| `isolate_apps` / `app_port_base` | false / 8100 | تشغيل كل تطبيق على منفذ خاص، وأول منفذ يُعطى تلقائياً (لكل تطبيق: `own_port` أو `port`) |
 | `cross_origin_isolation` | false | ترويسات COOP/COEP (عام أو لكل تطبيق) |
-| `tls_cert` / `tls_key` | — | تفعيل HTTPS |
+| `localize_external` | true | تنزيل موارد الإنترنت (CDN والخطوط) بعد كل تثبيت ليعمل التطبيق بدون إنترنت |
+| `tls_cert` / `tls_key` | — | مسار الشهادة والمفتاح (يضبطهما `--setup-https` تلقائياً) |
 | `access_log` | false | تسجيل الطلبات في `logs/server.log` |
 
 التطبيقات تُدار من اللوحة، أو يدوياً في `apps` (`id`, `folder_prefix`, `repo`, `asset_pattern`, `auto_update`, ...).
@@ -106,6 +154,8 @@ python updater.py --latest --all                 تحديث كل التطبيق�
 python updater.py --app pdfcraft --tag v1.2.0    إصدار محدد
 python updater.py --app pdfcraft --rollback      النسخة السابقة
 python updater.py --import PATH...               ملفات منزّلة مسبقاً
+python updater.py --localize [--app NAME]        توطين موارد الإنترنت (يعمل بدون إنترنت)
+python server.py --setup-https [--names a,b]     HTTPS بأمر واحد (python -m craftweb https)
 ```
 
 ## الإصدارات على GitHub (تلقائية)
@@ -125,16 +175,16 @@ python updater.py --import PATH...               ملفات منزّلة مسب�
 3. يفك الـ workflow الحزمة فوق المشروع، يختبرها، يحذف الـ zip، ويصدر release جديداً.
 
 ملفات `.github/workflows/` لا تُستبدل من الحزم أبداً. إن كان `main` محمياً فاسمح لـ `github-actions[bot]` بالدفع.
-بعد أول push استبدل `OWNER` في `README.md` و`docker-compose.yml` و`.github/ISSUE_TEMPLATE/config.yml` باسم حسابك.
+اسم المستودع المفترض: `zigh2/craft-web-server` (الروابط والشارات في هذا الملف تعتمد عليه).
 
 ## الهيكل
 
 ```
 ├── VERSION  CHANGELOG.md  apps.json  Dockerfile  docker-compose.yml
 ├── server.py  updater.py  run.py                 نقاط التشغيل
-├── craftweb/    config · server · admin · security · updater · scheduler · inbox
+├── craftweb/    config · server · admin · security · updater · scheduler · inbox · portmux · diagnose · localize · pki
 │   └── dashboard/                                واجهة اللوحة (بدون اعتماديات)
-├── root/ cache/ inbox/ logs/ state.json admin.json   بيانات التشغيل (غير مرفوعة)
+├── root/ cache/ (zips + vendor/) inbox/ logs/ certs/ state.json admin.json   بيانات التشغيل (غير مرفوعة)
 ├── incoming/                                     تحديثات المشروع نفسه
 ├── tests/   deploy/craft-web-server.service
 └── .github/  workflows · scripts · ISSUE_TEMPLATE · dependabot.yml

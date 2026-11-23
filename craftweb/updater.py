@@ -28,6 +28,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import quote, urlsplit
 
 from . import config as cfg
+from . import localize
 
 API = "https://api.github.com"
 USER_AGENT = "CraftWeb-Manager"
@@ -254,6 +255,7 @@ def _place(app, name, source):
 def _activate_if(app, name, asset, sha256, mode, before):
     key = lambda n: cfg.version_key(n, app["folder_prefix"])  # noqa: E731
     if mode == "always" or before is None or key(name) > key(before.name):
+        localize.auto(cfg.root_dir() / name, say)   # offline-ready before anyone opens it
         activate(app, name, asset, sha256)
         return True
     say("Installed %s but kept %s active (it is newer)." % (name, before.name))
@@ -387,9 +389,16 @@ def _cache_valid(path, asset):
 _VERSION_IN_NAME = re.compile(r"v?\d+(?:\.\d+)+[\w.+-]*", re.IGNORECASE)
 
 
+def _norm(name):
+    """'FigCraft_Web_' / 'figcraft-web-' / 'figcraft' -> 'figcraft'"""
+    n = re.sub(r"[^a-z0-9]+", "", str(name).lower())
+    return n[:-3] if n.endswith("web") and len(n) > 3 else n
+
+
 def match_app(filename, apps):
-    """'pdfcraft-web-v1.2.0.zip' -> (app, 'v1.2.0'). Longest folder_prefix wins; as a
-    fallback a name that matches exactly one app's asset_pattern is accepted."""
+    """'pdfcraft-web-v1.2.0.zip' -> (app, 'v1.2.0'). Longest folder_prefix wins, then the
+    same name with other punctuation/case. Release patterns are deliberately NOT used:
+    a loose pattern like '.*web.*' would swallow unrelated files."""
     stem = filename[:-4] if filename.lower().endswith(".zip") else filename
     best = None
     for app in apps:
@@ -399,18 +408,100 @@ def match_app(filename, apps):
             best = (app, stem[len(prefix):])
     if best and cfg.TAG_RE.match(best[1]):
         return best
-    if filename.lower().endswith(".zip"):
-        hits = []
+    # Same name with different punctuation/case ("FigCraft_Web_2.0.zip" vs app "figcraft"):
+    # it is the same app, so it must not become a duplicate.
+    det = detect_app(filename)
+    if det:
+        wanted = _norm(det["folder_prefix"])
         for app in apps:
-            try:
-                if re.fullmatch(app.get("asset_pattern", r".*\.zip$"), filename, re.IGNORECASE):
-                    hits.append(app)
-            except re.error:
-                continue
-        version = _VERSION_IN_NAME.search(stem)
-        if len(hits) == 1 and version and cfg.TAG_RE.match(version.group(0)):
-            return hits[0], version.group(0)
+            if wanted in (_norm(app.get("id", "")), _norm(app.get("folder_prefix", ""))):
+                return app, det["tag"]
     return None
+
+
+# ---------------------------------------------------------------- automatic recognition
+# "<name><sep><version>[.zip]" is enough to define an app: pdfcraft-web-v1.2.0.zip ->
+# app "pdfcraft", folder prefix "pdfcraft-web-", version "v1.2.0".
+_DETECT = re.compile(
+    r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*?[A-Za-z0-9])?)(?P<sep>[-_.])"
+    r"(?P<tag>(?:[vV]\d+(?:\.\d+)*|\d+(?:\.\d+)+)(?:[-+_.]?[A-Za-z0-9][A-Za-z0-9._+-]*)?)$")
+
+
+def detect_app(filename):
+    """Read an app definition out of a file/folder name, or return None."""
+    stem = filename[:-4] if filename.lower().endswith(".zip") else filename
+    m = _DETECT.match(stem)
+    if not m or not re.search("[A-Za-z]", m.group("name")) or not cfg.TAG_RE.match(m.group("tag")):
+        return None
+    name, prefix = m.group("name"), m.group("name") + m.group("sep")
+    base = re.sub(r"[-_.]web$", "", name, flags=re.IGNORECASE) or name
+    app_id = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-")[:40]
+    if app_id in cfg.RESERVED_IDS:
+        app_id += "-app"
+    if not cfg.ID_RE.match(app_id) or len(prefix) > 60:
+        return None
+    return {"id": app_id, "title": " ".join(w.capitalize() for w in re.split(r"[-_.]+", app_id)),
+            "folder_prefix": prefix, "tag": m.group("tag"),
+            "asset_pattern": "^" + re.escape(prefix) + r".*\.zip$"}
+
+
+def prefix_conflict(prefix, apps):
+    """The app whose prefix is a different prefix of (or starts with) this one, if any."""
+    mine = prefix.lower()
+    for a in apps:
+        theirs = str(a.get("folder_prefix", "")).lower()
+        if theirs and theirs != mine and (mine.startswith(theirs) or theirs.startswith(mine)):
+            return a
+    return None
+
+
+def unique_id(base, taken):
+    app_id, n = base, 2
+    while app_id in taken:
+        app_id = "%s-%d" % (base[:36], n)
+        n += 1
+    return app_id
+
+
+def register_detected(det):
+    """Add a detected app to apps.json (or return the one that already has this prefix)."""
+    out = {}
+
+    def mutate(apps):
+        for a in apps:
+            if str(a.get("folder_prefix", "")).lower() == det["folder_prefix"].lower():
+                out["app"] = a
+                return
+        clash = prefix_conflict(det["folder_prefix"], apps)
+        if clash:
+            raise UpdateError("folder prefix '%s' overlaps with app '%s'" % (det["folder_prefix"], clash.get("id")))
+        taken = {str(a.get("id", "")).lower() for a in apps}
+        new = {"id": unique_id(det["id"], taken), "title": det["title"],
+               "folder_prefix": det["folder_prefix"], "repo": "",
+               "asset_pattern": det["asset_pattern"], "index_path": "index.html",
+               "description": "", "icon": "", "enabled": True, "prerelease": False,
+               "auto_update": False}
+        apps.append(new)
+        out["app"] = new
+
+    cfg.update_apps(mutate)
+    return out["app"]
+
+
+def resolve_app(filename, create=True):
+    """Existing app by name, else (if allowed) a brand-new app read from the name.
+    Returns (app, tag, created) or None."""
+    apps = [a for a in cfg.load_config()["apps"] if a.get("enabled", True) and a.get("id")
+            and a.get("folder_prefix")]
+    hit = match_app(filename, apps)
+    if hit:
+        return hit[0], hit[1], False
+    det = detect_app(filename) if create else None
+    if det is None:
+        return None
+    app = register_detected(det)
+    say("New app recognised from the file name: %s (%s)" % (app["id"], app["folder_prefix"]))
+    return app, det["tag"], True
 
 
 def _collect(paths):
@@ -430,7 +521,7 @@ def _collect(paths):
     return found
 
 
-def import_paths(paths, app_id=None):
+def import_paths(paths, app_id=None, create=None):
     """Install files you already downloaded (zips or extracted folders) - no download.
 
     Newer-than-active versions are activated; older ones are installed only while they
@@ -440,7 +531,9 @@ def import_paths(paths, app_id=None):
             and a.get("folder_prefix")]
     keep_n = int(config["settings"].get("backup_count", 3)) + 1
     forced = find_app(apps, app_id) if app_id else None
-    plan, skipped, seen = {}, [], set()
+    if create is None:
+        create = bool(config["settings"].get("auto_create_apps", True))
+    plan, skipped, seen, created = {}, [], set(), []
 
     for item in _collect(paths):
         if forced:
@@ -451,8 +544,21 @@ def import_paths(paths, app_id=None):
             matched = (forced, tag) if cfg.TAG_RE.match(tag) else None
         else:
             matched = match_app(item.name, apps)
+            if matched is None and create:
+                det = detect_app(item.name)
+                if det:
+                    try:
+                        app = register_detected(det)
+                    except UpdateError as exc:
+                        skipped.append((item, str(exc)))
+                        continue
+                    if app not in apps:
+                        apps.append(app)
+                        created.append(app["id"])
+                        say("New app recognised: %s (%s)" % (app["id"], app["folder_prefix"]))
+                    matched = (app, det["tag"])
         if matched is None:
-            skipped.append((item, "name does not match any configured app"))
+            skipped.append((item, "could not read an app name and version from the name"))
             continue
         app, tag = matched
         key = (app["id"], sanitize_tag(tag))
@@ -462,7 +568,7 @@ def import_paths(paths, app_id=None):
         seen.add(key)
         plan.setdefault(app["id"], (app, []))[1].append((tag, item))
 
-    result = {"installed": [], "cached": [], "skipped": skipped}
+    result = {"installed": [], "cached": [], "skipped": skipped, "created": created}
     for app, entries in plan.values():
         installed_tags = [cfg.tag_of(app, f.name) for f in cfg.installed_folders(app)]
         ranked = sorted({t for t, _ in entries} | set(installed_tags),
@@ -646,6 +752,11 @@ def build_parser():
     p.add_argument("--rollback", action="store_true", help="re-activate the previous version")
     p.add_argument("--import", dest="import_paths", nargs="+", metavar="PATH",
                    help="install files you already downloaded (zips / folders), no download")
+    p.add_argument("--localize", action="store_true",
+                   help="download the internet resources (CDN files, web fonts) the active version "
+                        "of --app (default: every app) loads, and use local copies")
+    p.add_argument("--no-create", action="store_true",
+                   help="with --import: do not create apps from unknown file names")
     p.add_argument("--prerelease", action="store_true", help="include pre-releases")
     return p
 
@@ -671,10 +782,22 @@ def main(argv=None):
         if args.check:
             return 10 if check_updates(apps, prerelease) else 0
 
+        if args.localize:
+            for target in ([find_app(apps, args.app)] if args.app else apps):
+                active = cfg.active_folder(target)
+                if active is None:
+                    continue
+                say("Localizing %s %s ..." % (target["id"], cfg.tag_of(target, active.name)))
+                result = localize.localize_folder(active, say)
+                if not result["files_changed"] and not result["failed"]:
+                    say("  nothing to localize.")
+            return 0
+
         if args.import_paths:
-            result = import_paths(args.import_paths, args.app)
-            say("\nImported: %d installed, %d cached only, %d skipped." % (
-                len(result["installed"]), len(result["cached"]), len(result["skipped"])))
+            result = import_paths(args.import_paths, args.app, create=False if args.no_create else None)
+            say("\nImported: %d installed, %d cached only, %d skipped; %d new app(s): %s" % (
+                len(result["installed"]), len(result["cached"]), len(result["skipped"]),
+                len(result["created"]), ", ".join(result["created"]) or "-"))
             for path, why in result["skipped"]:
                 say("  skipped %s: %s" % (path, why))
             return 0 if result["installed"] or result["cached"] else 1

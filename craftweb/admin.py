@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
 from . import config as cfg
-from . import inbox, scheduler, security, updater
+from . import diagnose, inbox, localize, pki, portmux, scheduler, security, updater
 
 STATIC_DIR = Path(__file__).parent / "dashboard"
 STATIC_FILES = {
@@ -217,7 +217,7 @@ def _disk_usage():
     return total
 
 
-def _app_view(app, state, live, latest):
+def _app_view(app, state, live, latest, ports):
     folders = cfg.installed_folders(app)
     active = cfg.active_folder(app, state)
     entry = state.get(str(app["id"]).lower(), {})
@@ -231,6 +231,9 @@ def _app_view(app, state, live, latest):
         "prerelease": bool(app.get("prerelease", False)),
         "cross_origin_isolation": bool(app.get("cross_origin_isolation", False)),
         "auto_update": bool(app.get("auto_update", False)),
+        "own_port": app.get("own_port"), "port_config": app.get("port") or None,
+        "port": ports.get(str(app["id"]).lower()),
+        "port_error": portmux.status(str(app["id"]).lower()).get("error"),
         "latest": latest.get(app["id"]),
         "cache": updater.cache_list(app),
         "active": cfg.tag_of(app, active.name) if active else None,
@@ -326,6 +329,7 @@ def r_overview(c):
     usage = shutil.disk_usage(root)
     configured = {str(a["id"]).lower() for a in config["apps"] if a.get("id")}
     latest = scheduler.snapshot()
+    ports = portmux.active()
     return {
         "server": {
             "name": settings["server_name"], "version": __version__,
@@ -336,11 +340,14 @@ def r_overview(c):
             "session_minutes": settings["admin_session_minutes"],
             "max_upload_mb": settings["max_upload_mb"],
             "inbox_enabled": settings["inbox_enabled"],
-            "admin_port": settings["admin_port"],
+            "admin_port": settings["admin_port"], "public_port": cfg.RUNTIME.get("port", settings["port"]),
+            "isolate_apps": settings["isolate_apps"], "app_port_base": settings["app_port_base"],
+            "localize_external": settings["localize_external"],
+            "cross_origin_isolation": settings["cross_origin_isolation"],
             "auto_update_hours": settings["auto_update_hours"],
             "cache_enabled": settings["cache_enabled"], "cache_keep": settings["cache_keep"],
         },
-        "apps": [_app_view(a, state, live, latest) for a in config["apps"]
+        "apps": [_app_view(a, state, live, latest, ports) for a in config["apps"]
                  if a.get("id") and a.get("folder_prefix")],
         "discovered": [{"id": a["id"], "version": a["version"]}
                        for a in live.values() if a["id"] not in configured],
@@ -479,6 +486,12 @@ def validate_app(data):
     if (not re.match(r"^[A-Za-z0-9_./-]{1,100}$", index) or index.startswith("/")
             or ".." in index.split("/")):
         raise ApiError(400, "Invalid index path.", "bad_index")
+    try:
+        port = int(data.get("port") or 0)
+    except (TypeError, ValueError):
+        port = -1
+    if port and not 1024 <= port <= 65535:
+        raise ApiError(400, "Port must be between 1024 and 65535.", "bad_port")
     icon = text("icon", 8)
     if icon.isascii() and icon:
         icon = ""  # only emoji / symbols are shown as icons
@@ -490,6 +503,8 @@ def validate_app(data):
         "prerelease": bool(data.get("prerelease", False)),
         "auto_update": bool(data.get("auto_update", False)),
         "cross_origin_isolation": bool(data.get("cross_origin_isolation", False)),
+        "own_port": bool(data.get("own_port", False)),
+        "port": port,
     }
 
 
@@ -497,6 +512,7 @@ def r_app_save(c):
     body = c.json()
     data = validate_app(body.get("app"))
     original = str(body.get("original_id") or "").lower()
+    settings = cfg.load_config()["settings"]
     if original:
         data["id"] = original  # the ID (URL + state key) never changes
     with _exclusive():
@@ -507,6 +523,11 @@ def r_app_save(c):
                 raise ApiError(404, "Unknown application", "no_app")
             if not original and index is not None:
                 raise ApiError(409, "An application with this ID already exists.", "exists")
+            taken = {int(cfg.RUNTIME.get("port", settings["port"])),
+                     int(cfg.RUNTIME.get("admin_port", settings.get("admin_port") or 0))}
+            taken |= {int(o["port"]) for o in apps if o.get("port") and str(o.get("id", "")).lower() != data["id"]}
+            if data["port"] and data["port"] in taken:
+                raise ApiError(409, "This port is already used.", "port_in_use")
             mine = data["folder_prefix"].lower()
             for other in apps:
                 if str(other.get("id", "")).lower() == data["id"]:
@@ -525,6 +546,7 @@ def r_app_save(c):
                 apps[index].update(data)
         cfg.update_apps(mutate)
     security.audit(c.ip, "app-save", data["id"])
+    portmux.wake.set()
     return {"ok": True}
 
 
@@ -543,6 +565,73 @@ def r_app_delete(c):
             cfg.save_state(state)
     _du["at"] = 0.0
     security.audit(c.ip, "app-delete", "%s purge=%s" % (app["id"], bool(body.get("purge"))))
+    portmux.wake.set()
+    return {"ok": True}
+
+
+def r_diagnose(c):
+    app = _cfg_app(c.arg("app"))
+    active = cfg.active_folder(app)
+    if active is None:
+        raise ApiError(404, "Nothing is installed for this app.", "no_version")
+    result = diagnose.scan(active, app.get("index_path", "index.html"))
+    settings = c.settings
+    result.update(version=cfg.tag_of(app, active.name), tls=_tls(c),
+                  localized=localize.summary(active),
+                  own_port=str(app["id"]).lower() in portmux.active(),
+                  isolation=bool(app.get("cross_origin_isolation", settings["cross_origin_isolation"])))
+    return result
+
+
+SETTING_KEYS = {"isolate_apps": bool, "cross_origin_isolation": bool, "localize_external": bool}
+
+
+def r_https_info(c):
+    data = pki.info()
+    configured = bool(c.settings.get("tls_cert") and c.settings.get("tls_key"))
+    data.update(active=_tls(c), configured=configured, needs_restart=configured and not _tls(c),
+                public_port=cfg.RUNTIME.get("port", c.settings["port"]))
+    return data
+
+
+def r_https_setup(c):
+    body = c.json()
+    names = body.get("names") or []
+    if not isinstance(names, list) or len(names) > 20:
+        raise ApiError(400, "Invalid host names.", "bad_request")
+    try:
+        pki._split_extra(names)           # validate now, so the error is shown immediately
+    except ValueError as exc:
+        raise ApiError(400, str(exc), "bad_host")
+    security.audit(c.ip, "https-setup", ",".join(str(n) for n in names)[:200])
+    job = _start_job(c, "Set up HTTPS", lambda: pki.setup(names, renew=bool(body.get("renew")), new_ca=bool(body.get("new_ca")),
+                                                     log=updater.say))
+    return {"job": job["id"]}
+
+
+def r_localize(c):
+    app = _cfg_app(c.json().get("app", ""))
+    active = cfg.active_folder(app)
+    if active is None:
+        raise ApiError(404, "Nothing is installed for this app.", "no_version")
+    security.audit(c.ip, "localize", app["id"])
+    job = _start_job(c, "Make %s offline-ready" % app["id"],
+                     lambda: localize.localize_folder(active, updater.say))
+    return {"job": job["id"]}
+
+
+def r_settings(c):
+    body = c.json()
+    changes = {}
+    for key, kind in SETTING_KEYS.items():
+        if key in body:
+            changes[key] = kind(body[key])
+    if not changes:
+        raise ApiError(400, "Nothing to change.", "bad_request")
+    with _exclusive():
+        cfg.update_settings(changes)
+    security.audit(c.ip, "settings", json.dumps(changes))
+    portmux.wake.set()
     return {"ok": True}
 
 
@@ -558,13 +647,29 @@ def r_match(c):
     names = c.json().get("names")
     if not isinstance(names, list) or len(names) > 200:
         raise ApiError(400, "Invalid request", "bad_request")
-    apps = [a for a in cfg.load_config()["apps"]
-            if a.get("enabled", True) and a.get("id") and a.get("folder_prefix")]
-    out = []
+    config = cfg.load_config()
+    apps = [a for a in config["apps"] if a.get("enabled", True) and a.get("id") and a.get("folder_prefix")]
+    taken = {str(a.get("id", "")).lower() for a in config["apps"]}
+    planned, out = {}, []
     for name in names:
-        hit = updater.match_app(str(name)[:200], apps)
-        out.append({"name": str(name)[:200], "app": hit[0]["id"] if hit else "",
-                    "tag": hit[1] if hit else ""})
+        name = str(name)[:200]
+        hit = updater.match_app(name, apps)
+        if hit:
+            out.append({"name": name, "app": hit[0]["id"], "tag": hit[1], "suggest": None})
+            continue
+        det = updater.detect_app(name)
+        suggest = None
+        if det and config["settings"].get("auto_create_apps", True) \
+                and not updater.prefix_conflict(det["folder_prefix"], config["apps"]):
+            key = det["folder_prefix"].lower()
+            if key not in planned:
+                app_id = updater.unique_id(det["id"], taken)
+                taken.add(app_id)
+                planned[key] = {"id": app_id, "title": det["title"],
+                                "folder_prefix": det["folder_prefix"],
+                                "asset_pattern": det["asset_pattern"]}
+            suggest = planned[key]
+        out.append({"name": name, "app": "", "tag": det["tag"] if det else "", "suggest": suggest})
     return {"matches": out}
 
 
@@ -636,6 +741,9 @@ ROUTES = {
     ("GET", "job"): r_job, ("GET", "jobs"): r_jobs, ("GET", "audit"): r_audit,
     ("POST", "password"): r_password,
     ("POST", "check"): r_check, ("POST", "match"): r_match,
+    ("GET", "diagnose"): r_diagnose, ("POST", "settings"): r_settings,
+    ("POST", "localize"): r_localize,
+    ("GET", "https-info"): r_https_info, ("POST", "https-setup"): r_https_setup,
     ("POST", "cache-install"): r_cache_install, ("POST", "cache-delete"): r_cache_delete,
 }
 PUBLIC = {"session", "login"}

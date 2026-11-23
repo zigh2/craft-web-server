@@ -6,6 +6,7 @@ from . import __version__
 USAGE = """usage: craft-web-server [serve] [--port N]        run the server (default)
        craft-web-server update [options]          install / update apps (see: update --help)
        craft-web-server passwd                    set the dashboard password
+       craft-web-server https [--names a,b]       create a local CA + certificate and enable HTTPS
        craft-web-server version"""
 
 
@@ -21,6 +22,9 @@ def main(argv=None):
     if command in ("passwd", "set-admin-password"):
         from .server import main as serve
         return serve(["--set-admin-password"])
+    if command in ("https", "setup-https"):
+        from .pki import main as https
+        return https(args)
     if command in ("version", "--version"):
         print(__version__)
         return 0

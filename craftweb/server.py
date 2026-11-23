@@ -1,6 +1,7 @@
 """Static web server that publishes every installed Craft app under /<app-id>/."""
 import argparse
 import html
+import http.cookies
 import json
 import logging
 import logging.handlers
@@ -14,7 +15,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 from . import __version__
-from . import admin, inbox, scheduler, security
+from . import admin, inbox, localize, pki, portmux, scheduler, security
 from . import config as cfg
 
 # Windows registries often map .js to text/plain, which breaks module scripts.
@@ -22,6 +23,8 @@ mimetypes.add_type("application/wasm", ".wasm")
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/javascript", ".mjs")
 mimetypes.add_type("application/manifest+json", ".webmanifest")
+for _ext, _type in ((".woff2", "font/woff2"), (".woff", "font/woff"), (".ttf", "font/ttf"), (".otf", "font/otf")):
+    mimetypes.add_type(_type, _ext)
 
 PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -68,20 +71,23 @@ function filterApps() {
 """
 
 
-def render_home():
+def render_home(hostname="localhost", scheme="http"):
     apps = cfg.discover_apps()
+    ports = portmux.active()
     cards = []
     for app in sorted(apps.values(), key=lambda a: a["title"].lower()):
         icon = app["icon"] if app["icon"] and not app["icon"].isascii() else "🌐"
+        href = ("%s://%s:%d/" % (scheme, hostname, ports[app["id"]]) if app["id"] in ports
+                else "/%s/" % quote(app["id"]))
         cards.append(
-            '<a class="card" href="/%s/" data-search="%s">'
+            '<a class="card" href="%s" data-search="%s">'
             '<div class="icon">%s</div>'
             '<div class="title">%s</div>'
             '<div class="description">%s</div>'
             '<div class="version">%s</div>'
             '<div class="open">فتح التطبيق ←</div></a>'
             % (
-                quote(app["id"]),
+                html.escape(href, quote=True),
                 html.escape(app["title"].lower(), quote=True),
                 html.escape(icon),
                 html.escape(app["title"]),
@@ -138,6 +144,7 @@ class CraftHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self._app = None  # must exist before the base class handles the request
         self._admin = False
+        self._compat = False
         super().__init__(*args, directory=str(cfg.root_dir()), **kwargs)
 
     # -- headers shared by every response
@@ -153,6 +160,13 @@ class CraftHandler(SimpleHTTPRequestHandler):
         if self._app and self._app.get("cross_origin_isolation"):
             self.send_header("Cross-Origin-Opener-Policy", "same-origin")
             self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        if self._compat:
+            self.send_header("X-Craft-Compat", "root-path")  # served through the root-path fallback
+        elif self._app and not getattr(self.server, "app_id", None) and self._is_document():
+            # Remember the app of the last page opened: its absolute-path requests
+            # ("/assets/x.js") are then served from that app (see _compat_app).
+            cookie = "craft_app=%s; Path=/; SameSite=Lax; HttpOnly" % self._app["id"]
+            self.send_header("Set-Cookie", cookie + ("; Secure" if getattr(self.server, "tls", False) else ""))
         super().end_headers()
 
     # -- routing
@@ -208,7 +222,18 @@ class CraftHandler(SimpleHTTPRequestHandler):
             return True
 
         if path in ("/", "/index.html"):
-            self._send(render_home().encode("utf-8"), "text/html; charset=utf-8", head)
+            self._send(render_home(self._hostname(), "https" if getattr(self.server, "tls", False) else "http")
+                       .encode("utf-8"), "text/html; charset=utf-8", head)
+            return True
+
+        if path in ("/ca.crt", "/ca.cer", "/ca.pem"):   # the public certificate authority (never the key)
+            data = pki.ca_der() if path == "/ca.cer" else pki.ca_pem()
+            if data is None:
+                self.send_error(404)
+            else:
+                self._send(data, "application/x-x509-ca-cert", head, 200,
+                           [("Content-Disposition", 'attachment; filename="craft-web-server-ca%s"' % (
+                               ".cer" if path == "/ca.cer" else ".crt"))])
             return True
 
         if path in ("/health", "/api/apps"):
@@ -216,9 +241,10 @@ class CraftHandler(SimpleHTTPRequestHandler):
             if path == "/health":
                 data = {"status": "ok", "version": __version__, "apps": len(apps)}
             else:
+                ports = portmux.active()
                 data = [
                     {"id": a["id"], "title": a["title"], "version": a["version"],
-                     "source": a["source"]}
+                     "source": a["source"], "port": ports.get(a["id"])}
                     for a in apps.values()
                 ]
             self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"),
@@ -238,31 +264,101 @@ class CraftHandler(SimpleHTTPRequestHandler):
             return True
         return False
 
-    def translate_path(self, path):
+    # -- request classification
+    def _hostname(self):
+        host = self.headers.get("Host", "")
+        if host.startswith("["):
+            return host.split("]")[0] + "]"
+        return host.rsplit(":", 1)[0] if ":" in host else host
+
+    def _wants_html(self):
+        dest = self.headers.get("Sec-Fetch-Dest")
+        if dest:
+            return dest in ("document", "iframe", "frame")
+        accept = self.headers.get("Accept", "")
+        return not accept or "text/html" in accept
+
+    def _is_document(self):
+        dest = self.headers.get("Sec-Fetch-Dest")
+        if dest:
+            return dest in ("document", "iframe", "frame")
+        path = urlsplit(self.path).path
+        return path.endswith("/") or path.endswith(".html")
+
+    def _compat_app(self):
+        """Which app does a root-level request ("/assets/x.js") belong to? The page that
+        asked (Referer), else the app of the last page opened in this browser (cookie)."""
+        apps = cfg.discover_apps()
+        referer = self.headers.get("Referer")
+        if referer:
+            ref = urlsplit(referer)
+            if ref.netloc == self.headers.get("Host", ""):
+                seg = [p for p in unquote(ref.path).split("/") if p]
+                if seg and seg[0].lower() in apps:
+                    return apps[seg[0].lower()]
+        jar = http.cookies.SimpleCookie()
+        try:
+            jar.load(self.headers.get("Cookie", ""))
+        except http.cookies.CookieError:
+            return None
+        morsel = jar.get("craft_app")
+        return apps.get(morsel.value.lower()) if morsel else None
+
+    def _file_for(self, app, rest):
+        """File inside an app for the path segments `rest` (empty = the app's index)."""
         missing = str(cfg.root_dir() / "__not_found__")
-        parts = [unquote(p) for p in urlsplit(path).path.split("/") if p]
-        if not parts:
-            return missing
-
-        app = cfg.discover_apps().get(parts[0].lower())
-        if app is None:
-            return missing
-        self._app = app
-
         base = app["base"]
-        if len(parts) == 1:
+        if not rest:
             return str(app["index"])
-
-        target = base.joinpath(*parts[1:]).resolve()
+        target = base.joinpath(*rest).resolve()
         # Block path traversal (../ and symlinks pointing outside the app)
         if target != base and base not in target.parents:
             return missing
         if target.is_dir():
             target = target / "index.html"
-        # Single-page-app fallback for extension-less client routes
-        if not target.exists() and not Path(parts[-1]).suffix:
+        # Single-page-app fallback for extension-less client routes (page loads only)
+        if not target.exists() and not Path(rest[-1]).suffix and self._wants_html():
             target = app["index"]
         return str(target)
+
+    def translate_path(self, path):
+        missing = str(cfg.root_dir() / "__not_found__")
+        parts = [unquote(p) for p in urlsplit(path).path.split("/") if p]
+        if not parts:
+            return missing
+        if parts[0] == "_vendor":                # downloaded CDN files, shared by all apps
+            return str(localize.vendor_file(parts[1:]) or missing)
+        app = cfg.discover_apps().get(parts[0].lower())
+        if app is not None:                      # /<app-id>/...
+            self._app = app
+            return self._file_for(app, parts[1:])
+        app = self._compat_app()                 # apps built for "/": /assets/x.js
+        if app is None:
+            return missing
+        self._app, self._compat = app, True
+        return self._file_for(app, parts)
+
+
+class AppHandler(CraftHandler):
+    """Serves ONE app from the root of its own port, so apps that expect to live at "/"
+    work unchanged and are isolated (storage, service workers) from the other apps."""
+
+    def _dispatch(self, head):
+        return False
+
+    def do_POST(self):
+        self.send_error(405)
+
+    def translate_path(self, path):
+        missing = str(cfg.root_dir() / "__not_found__")
+        parts = [unquote(p) for p in urlsplit(path).path.split("/") if p]
+        if parts and parts[0] == "_vendor":
+            return str(localize.vendor_file(parts[1:]) or missing)
+        app = cfg.discover_apps().get(getattr(self.server, "app_id", ""))
+        if app is None:
+            return missing
+        self._app = app
+        return self._file_for(app, parts)
 
 
 class AdminHandler(CraftHandler):
@@ -299,9 +395,14 @@ def main(argv=None):
     parser.add_argument("--port", type=int, help="override settings.port")
     parser.add_argument("--set-admin-password", action="store_true",
                         help="set or change the dashboard password, then exit")
+    parser.add_argument("--setup-https", action="store_true",
+                        help="create a local certificate authority + server certificate and enable HTTPS, then exit")
+    parser.add_argument("--names", help="with --setup-https: extra host names / IPs, comma separated")
     args = parser.parse_args(argv)
 
     cfg.ensure_default_config()
+    if args.setup_https:
+        return pki.main((["--names", args.names] if args.names else []))
     if args.set_admin_password:
         import getpass
         first = getpass.getpass("New admin password (min %d chars): " % security.MIN_PASSWORD)
@@ -332,6 +433,7 @@ def main(argv=None):
         except ValueError as exc:
             LOG.warning("CRAFTWEB_ADMIN_PASSWORD ignored: %s", exc)
 
+    cfg.RUNTIME["port"] = port
     public = _make_server(host, port, CraftHandler, settings)
     scheme = "https" if public.tls else "http"
     ip = local_ip()
@@ -339,6 +441,7 @@ def main(argv=None):
     admin_server, admin_url = None, None
     if settings.get("admin_enabled", True):
         admin_port = int(settings.get("admin_port") or 0)
+        cfg.RUNTIME["admin_port"] = admin_port if admin_port != port else 0
         if admin_port and admin_port != port:
             admin_server = _make_server(settings.get("admin_host") or host, admin_port,
                                         AdminHandler, settings)
@@ -364,6 +467,13 @@ def main(argv=None):
     if settings.get("inbox_enabled", True):
         inbox.start()
     scheduler.start()
+
+    def app_listener(app_port, app_id):
+        listener = _make_server(host, app_port, AppHandler, cfg.load_config()["settings"])
+        listener.app_id = app_id
+        return listener
+
+    portmux.start(app_listener)
     if admin_server:
         threading.Thread(target=admin_server.serve_forever, name="admin-http",
                          daemon=True).start()
@@ -372,6 +482,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     finally:
+        portmux.stop_all()
         public.server_close()
         if admin_server:
             admin_server.shutdown()

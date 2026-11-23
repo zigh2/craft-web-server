@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from craftweb import admin, scheduler, security, updater  # noqa: E402
+from craftweb import admin, inbox, scheduler, security, updater  # noqa: E402
 from craftweb import config as cfg  # noqa: E402
 from craftweb.server import AdminHandler, CraftHandler  # noqa: E402
 
@@ -162,16 +162,92 @@ class ImportTests(Base):
         self.assertEqual(self.active(), "demo-web-v3.0.0")
 
     def test_import_cli_and_forced_app(self):
-        odd = make_zip(Path(self.tmp, "build-1.2.3-web.zip"), "x")  # prefix does not match
+        odd = make_zip(Path(self.tmp, "build_final.zip"), "x")  # no version in the name
         self.assertEqual(updater.main(["--import", str(odd)]), 1)
         self.assertEqual(updater.main(["--import", str(odd), "--app", "demo"]), 0)
-        self.assertEqual(self.active(), "demo-web-1.2.3-web")
+        self.assertEqual(self.active(), "demo-web-build_final")
 
     def test_match_app_rules(self):
-        apps = [APP, {"id": "fig", "folder_prefix": "fig-web-", "asset_pattern": r".*figweb.*\.zip$"}]
+        apps = [APP, {"id": "fig", "folder_prefix": "fig-web-", "asset_pattern": r".*web.*\.zip$"}]
         self.assertEqual(updater.match_app("demo-web-v1.2.0.zip", apps)[1], "v1.2.0")
-        self.assertEqual(updater.match_app("figweb-2.0.1.zip", apps)[0]["id"], "fig")
+        self.assertEqual(updater.match_app("Fig_Web_2.0.1.zip", apps)[0]["id"], "fig")
         self.assertIsNone(updater.match_app("whatever.zip", apps))
+        # a loose release pattern must never capture unrelated files
+        self.assertIsNone(updater.match_app("lesson-builder-web-v1.0.0.zip", apps))
+
+
+class AutoRecognitionTests(Base):
+    def test_detect_app_from_names(self):
+        cases = {
+            "pdfcraft-web-v1.2.0.zip": ("pdfcraft", "pdfcraft-web-", "v1.2.0"),
+            "Quran_Tools_2.3.zip": ("quran-tools", "Quran_Tools_", "2.3"),
+            "app-1.2.3-win.zip": ("app", "app-", "1.2.3-win"),
+            "tool2-v3.zip": ("tool2", "tool2-", "v3"),
+            "admin-v1.0.zip": ("admin-app", "admin-", "v1.0"),      # reserved id is avoided
+            "docs-web-1.0.0-beta.2": ("docs", "docs-web-", "1.0.0-beta.2"),   # folder name, no .zip
+        }
+        for name, (app_id, prefix, tag) in cases.items():
+            det = updater.detect_app(name)
+            self.assertEqual((det["id"], det["folder_prefix"], det["tag"]), (app_id, prefix, tag), name)
+        for name in ("notes.zip", "my app 1.0.zip", "x-1.zip", "report_2024.zip"):
+            self.assertIsNone(updater.detect_app(name), name)
+
+    def test_batch_of_zips_creates_apps_without_any_setup(self):
+        Path(self.tmp, "apps.json").write_text(json.dumps({"settings": {"backup_count": 1}, "apps": []}))
+        src = Path(self.tmp, "batch")
+        src.mkdir()
+        for n in ("lesson-builder-web-v1.0.0", "lesson-builder-web-v1.1.0", "Quran_Tools_2.3",
+                  "Quran_Tools_2.4", "readme"):
+            make_zip(src / (n + ".zip"), n)
+        result = updater.import_paths([str(src)])
+        apps = {a["id"]: a for a in cfg.load_config()["apps"]}
+        self.assertEqual(sorted(apps), ["lesson-builder", "quran-tools"])
+        self.assertEqual(apps["quran-tools"]["folder_prefix"], "Quran_Tools_")
+        self.assertEqual(sorted(result["created"]), ["lesson-builder", "quran-tools"])
+        cfg.invalidate_cache()
+        live = cfg.discover_apps()
+        self.assertEqual(live["lesson-builder"]["version"], "lesson-builder-web-v1.1.0")
+        self.assertEqual(live["quran-tools"]["version"], "Quran_Tools_2.4")
+        self.assertEqual([p.name for p, _ in result["skipped"]], ["readme.zip"])
+        self.assertEqual(cfg.load_config()["settings"]["backup_count"], 1)   # settings untouched
+
+    def test_can_be_turned_off(self):
+        Path(self.tmp, "apps.json").write_text(json.dumps(
+            {"settings": {"auto_create_apps": False}, "apps": []}))
+        z = make_zip(Path(self.tmp, "zed-v1.0.zip"), "z")
+        result = updater.import_paths([str(z)])
+        self.assertEqual((cfg.load_config()["apps"], len(result["skipped"])), ([], 1))
+
+    def test_same_app_with_other_punctuation_is_not_duplicated(self):
+        z = make_zip(Path(self.tmp, "Demo_Web_4.0.0.zip"), "d")     # existing app: demo-web-
+        updater.import_paths([str(z)])
+        self.assertEqual([a["id"] for a in cfg.load_config()["apps"]], ["demo"])
+        self.assertEqual(self.active(), "demo-web-4.0.0")
+
+    def test_overlapping_prefix_is_refused_not_merged(self):
+        Path(self.tmp, "apps.json").write_text(json.dumps({"apps": [
+            {"id": "alpha-beta", "folder_prefix": "alpha-beta-", "title": "Alpha Beta"}]}))
+        z = make_zip(Path(self.tmp, "alpha-v1.0.zip"), "t")   # "alpha-" is a prefix of "alpha-beta-"
+        result = updater.import_paths([str(z)])
+        self.assertEqual(len(cfg.load_config()["apps"]), 1)
+        self.assertIn("overlaps", result["skipped"][0][1])
+
+    def test_inbox_creates_unknown_app(self):
+        box = inbox.inbox_dir()
+        box.mkdir()
+        make_zip(box / "brand-new-web-v0.1.0.zip", "b")
+        sizes = {}
+        inbox.process_once(sizes)
+        inbox.process_once(sizes)
+        ids = [a["id"] for a in cfg.load_config()["apps"]]
+        self.assertIn("brand-new", ids)
+        cfg.invalidate_cache()
+        self.assertIn("brand-new", cfg.discover_apps())
+
+    def test_cli_reports_created_apps(self):
+        z = make_zip(Path(self.tmp, "gamma-v2.0.0.zip"), "g")
+        self.assertEqual(updater.main(["--import", str(z)]), 0)
+        self.assertIn("gamma", [a["id"] for a in cfg.load_config()["apps"]])
 
 
 class DiskSpaceTests(Base):
@@ -283,8 +359,15 @@ class DashboardCacheApiTests(Base):
         app = d["apps"][0]
         self.assertEqual(len(app["cache"]), 3)
         self.assertEqual(d["server"]["admin_port"], 8081)
-        r, d = self.call("POST", "/admin/api/match", {"names": ["demo-web-v9.zip", "nope.zip"]})
-        self.assertEqual([m["app"] for m in d["matches"]], ["demo", ""])
+        r, d = self.call("POST", "/admin/api/match", {"names": ["demo-web-v9.zip", "nope.zip",
+                         "Zeta_Kit_1.0.zip", "Zeta_Kit_1.1.zip", "other-app-v2.zip"]})
+        m = d["matches"]
+        self.assertEqual([x["app"] for x in m], ["demo", "", "", "", ""])
+        self.assertIsNone(m[1]["suggest"])
+        self.assertEqual(m[2]["suggest"]["id"], "zeta-kit")                 # recognised, not created yet
+        self.assertEqual(m[2]["suggest"], m[3]["suggest"])                    # one new app for both files
+        self.assertEqual((m[4]["suggest"]["id"], m[4]["tag"]), ("other-app", "v2"))
+        self.assertEqual([a["id"] for a in cfg.load_config()["apps"]], ["demo"])   # preview changes nothing
         name = [c for c in app["cache"] if c["tag"] == "v1.0.0"][0]["name"]
         r, d = self.call("POST", "/admin/api/cache-install", {"app": "demo", "name": name})
         self.assertEqual(r.status, 200, d)

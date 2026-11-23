@@ -13,9 +13,9 @@ def inbox_dir():
 
 
 def match_app(filename):
-    apps = [a for a in cfg.load_config()["apps"]
-            if a.get("enabled", True) and a.get("id") and a.get("folder_prefix")]
-    return updater.match_app(filename, apps)
+    create = bool(cfg.load_config()["settings"].get("auto_create_apps", True))
+    hit = updater.resolve_app(filename, create)
+    return (hit[0], hit[1]) if hit else None
 
 
 def _fail(path, reason):
@@ -40,7 +40,7 @@ def process_once(sizes):
             continue
         matched = match_app(path.name)
         if matched is None:
-            _fail(path, "File name must be <folder_prefix><version>.zip of a configured app.")
+            _fail(path, "Could not read an app name and version from the file name (expected name-version.zip).")
             continue
         if not cfg.OP_LOCK.acquire(blocking=False):
             return  # another operation is running; retry next tick

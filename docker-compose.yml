@@ -1,16 +1,18 @@
 services:
   craft-web-server:
-    image: ghcr.io/OWNER/craft-web-server:latest   # or: build: .
+    image: ghcr.io/zigh2/craft-web-server:latest   # or: build: .
     restart: unless-stopped
     ports:
       - "8080:8080"   # the apps
       - "8081:8081"   # the dashboard (keep it on your internal network)
+      # - "8100-8119:8100-8119"   # apps that run on their own port (isolate_apps / own_port)
     volumes:
       - craftweb-data:/data
     environment:
       # Used once, only if no password exists yet. Prefer: docker compose exec craft-web-server python -m craftweb passwd
       # CRAFTWEB_ADMIN_PASSWORD: "change-me-please"
       GITHUB_TOKEN: ""   # optional: private repositories / higher API limits
+    # HTTPS: docker compose exec craft-web-server python -m craftweb https   (then restart the container)
 
 volumes:
   craftweb-data:

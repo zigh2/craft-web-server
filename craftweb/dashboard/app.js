@@ -25,10 +25,24 @@ jobs:"Operations", audit:"Audit log", time:"Time", action:"Action", detail:"Deta
 server:"Server", python:"Python", host:"Listening on", security:"Security", tls_on:"HTTPS is enabled", tls_off:"HTTPS is off: the admin password travels unencrypted on this network. Set tls_cert and tls_key in apps.json.",
 networks:"Allowed admin networks", session_idle:"Session idle timeout", min:"min", max_upload:"Max upload", change_password:"Change password", current_pw:"Current password", new_pw:"New password (min 10 characters)", pw_changed:"Password changed",
 inbox:"Inbox folder", inbox_hint:"Copy <folder_prefix><version>.zip files here and they are installed automatically.", pending:"Waiting", failed_files:"Failed files", loading:"Loading…", lang_name:"العربية", theme:"Toggle theme",
-import_files:"Import downloaded files", import_title:"Import files you already downloaded", import_hint:"Pick the ZIP files (several at once). They are matched to your apps by name, installed without downloading anything, and kept in the local cache.",
+make_offline:"Make offline-ready", offline_ready:"Offline-ready", localize_all:"Download internet resources automatically after each install (the app then works offline)", setup_https_btn:"Set up HTTPS",
+https_title:"HTTPS", https_on:"HTTPS is active", https_restart:"Configured: restart the server to apply it", https_off:"Not set up", https_names:"Valid for", https_expires:"Expires in", days:"days",
+https_missing:"New addresses of this server are not in the certificate: ", https_renew:"Issue a new certificate", https_extra:"Extra names or IPs (comma separated)", https_setup_run:"Set up / update HTTPS",
+https_ca:"Certificate authority (trust it once on every device)", download_crt:"Download .crt", download_cer:"Download .cer", fingerprint:"Authority fingerprint (SHA-256)", trust_help:"How to trust the authority",
+new_ca:"Create a new authority (devices must trust it again)", https_hint:"Creates a private certificate authority and a certificate for this server, entirely offline. Trust the authority once on each device; then the browser shows the padlock and features such as service workers and the clipboard work.",
+compat_title:"Compatibility check", compat_run:"Check again", compat_ok:"No problems found", own_port_btn:"Run on its own port", coi_btn:"Enable COOP/COEP", f_ownport:"Run on its own port (best compatibility and isolation)", f_port:"Port (optional)", port_word:"port", port_err:"Port unavailable",
+compat_settings:"Compatibility", isolate_all:"Run every app on its own port", isolate_hint:"Fixes apps that expect to live at the site root (stuck on loading) and keeps each app's storage separate. Open ports 8100 and up in the firewall.", coi_all:"Cross-origin isolation (COOP/COEP) for all apps",
+diag_missing_files:"Files that do not exist", diag_missing_files_fix:"The page asks for files that are not in this build. The build may be incomplete: reinstall it or try another version.",
+diag_root_paths:"Files requested from the site root", diag_root_paths_fix:"Handled automatically by compatibility mode. For full isolation (and apps with a service worker) run it on its own port.",
+diag_external_resources:"Needs the internet", diag_external_resources_fix:"These hosts must be reachable, otherwise the app can stay on Loading on an offline network.",
+diag_secure_context:"Needs a secure context (HTTPS)", diag_secure_context_fix:"Uses browser features that are blocked on http://IP. Enable HTTPS (tls_cert and tls_key).",
+diag_wasm_threads:"Needs cross-origin isolation", diag_wasm_threads_fix:"Uses SharedArrayBuffer: enable COOP/COEP together with HTTPS.",
+diag_service_worker:"Uses a service worker", diag_service_worker_fix:"Best run on its own port so it cannot affect the other apps.",
+diag_base_href:"Sets base href", diag_base_href_fix:"May change where relative files are loaded from.", diag_no_index:"Entry file not found", diag_no_index_fix:"",
+import_files:"Import downloaded files", import_title:"Import files you already downloaded", import_hint:"Pick the ZIP files (several at once). A name like app-v1.2.0.zip is enough: apps are recognised and created automatically, installed without downloading anything, and kept in the local cache.",
 col_file:"File", col_app:"Application", col_version:"Version", import_start:"Import", import_done:"Done", import_skip:"skipped", import_pick:"Choose ZIP files", pick_app:"— choose —",
 cache_title:"Saved downloads (cache)", cache_hint:"Every ZIP you download, upload or import is kept here, so any version can be reinstalled without internet.", cache_empty:"Nothing saved yet.", install_cached:"Install", cached_n:"cached",
-f_auto:"Install updates automatically", last_checked:"Checked", update_now:"Update", onboard_title:"Already downloaded the app files?", onboard_body:"Import them now: nothing is downloaded again.",
+f_auto:"Install updates automatically", last_checked:"Checked", update_now:"Update", onboard_title:"Already downloaded the app files?", onboard_body:"No setup needed: apps are created from the file names (name + version) and nothing is downloaded again.",
 auto_every:"Update check every", hours:"h", admin_port:"Dashboard port", cache_keep:"ZIPs kept per app", off:"off", saved_dl:"Saved downloads"
 },
 ar: {
@@ -54,10 +68,24 @@ jobs:"العمليات", audit:"سجل التدقيق", time:"الوقت", actio
 server:"الخادم", python:"بايثون", host:"يعمل على", security:"الأمان", tls_on:"HTTPS مفعّل", tls_off:"HTTPS متوقف: كلمة المرور تنتقل بدون تشفير داخل الشبكة. فعّل tls_cert وtls_key في apps.json.",
 networks:"الشبكات المسموح لها بالدخول", session_idle:"مهلة الخمول", min:"دقيقة", max_upload:"أقصى حجم رفع", change_password:"تغيير كلمة المرور", current_pw:"كلمة المرور الحالية", new_pw:"كلمة المرور الجديدة (10 أحرف فأكثر)", pw_changed:"تم تغيير كلمة المرور",
 inbox:"مجلد الاستلام", inbox_hint:"انسخ ملفات <البادئة><الإصدار>.zip هنا ليتم تثبيتها تلقائياً.", pending:"بالانتظار", failed_files:"ملفات فاشلة", loading:"جارٍ التحميل…", lang_name:"English", theme:"تبديل المظهر",
-import_files:"استيراد ملفات منزّلة", import_title:"استيراد ملفات نزّلتها سابقاً", import_hint:"اختر ملفات ZIP (عدة ملفات معاً). تُطابَق مع تطبيقاتك بالاسم وتُثبَّت بدون تنزيل أي شيء، وتُحفظ في الكاش المحلي.",
+make_offline:"جعله يعمل بدون إنترنت", offline_ready:"جاهز للعمل بدون إنترنت", localize_all:"تنزيل موارد الإنترنت تلقائياً بعد كل تثبيت (يعمل التطبيق بعدها بدون إنترنت)", setup_https_btn:"تفعيل HTTPS",
+https_title:"HTTPS", https_on:"HTTPS يعمل", https_restart:"تم الإعداد: أعد تشغيل الخادم للتطبيق", https_off:"غير مفعّل", https_names:"صالحة للعناوين", https_expires:"تنتهي بعد", days:"يوماً",
+https_missing:"عناوين جديدة لهذا الخادم غير موجودة في الشهادة: ", https_renew:"إصدار شهادة جديدة", https_extra:"أسماء أو عناوين إضافية (مفصولة بفاصلة)", https_setup_run:"إعداد / تحديث HTTPS",
+https_ca:"مرجع الشهادات (ثبّته مرة واحدة على كل جهاز)", download_crt:"تنزيل .crt", download_cer:"تنزيل .cer", fingerprint:"بصمة المرجع (SHA-256)", trust_help:"طريقة الوثوق بالمرجع",
+new_ca:"إنشاء مرجع جديد (يجب الوثوق به من جديد على الأجهزة)", https_hint:"ينشئ مرجع شهادات خاصاً وشهادة لهذا الخادم بالكامل بدون إنترنت. تثبّت المرجع مرة واحدة على كل جهاز، ثم يظهر القفل وتعمل ميزات مثل Service Workers والحافظة.",
+compat_title:"فحص التوافق", compat_run:"فحص مجدداً", compat_ok:"لم تُوجد مشاكل", own_port_btn:"تشغيل على منفذ خاص", coi_btn:"تفعيل COOP/COEP", f_ownport:"تشغيل على منفذ خاص (أفضل توافق وعزل)", f_port:"رقم المنفذ (اختياري)", port_word:"منفذ", port_err:"المنفذ غير متاح",
+compat_settings:"التوافق", isolate_all:"تشغيل كل تطبيق على منفذ خاص", isolate_hint:"يحل مشكلة التطبيقات التي تتوقع العمل من جذر الموقع (تبقى على loading) ويعزل تخزين كل تطبيق. افتح المنافذ من 8100 فصاعداً في الجدار الناري.", coi_all:"عزل المصدر (COOP/COEP) لكل التطبيقات",
+diag_missing_files:"ملفات غير موجودة", diag_missing_files_fix:"الصفحة تطلب ملفات ليست في هذه النسخة. قد تكون النسخة ناقصة: أعد تثبيتها أو جرّب نسخة أخرى.",
+diag_root_paths:"ملفات تُطلب من جذر الموقع", diag_root_paths_fix:"تُعالَج تلقائياً بوضع التوافق. للعزل الكامل (وللتطبيقات ذات Service Worker) شغّله على منفذ خاص.",
+diag_external_resources:"يحتاج إلى الإنترنت", diag_external_resources_fix:"يجب أن تكون هذه المواقع قابلة للوصول، وإلا قد يبقى التطبيق على loading في شبكة بلا إنترنت.",
+diag_secure_context:"يحتاج سياقاً آمناً (HTTPS)", diag_secure_context_fix:"يستخدم ميزات يحجبها المتصفح على http://IP. فعّل HTTPS (tls_cert وtls_key).",
+diag_wasm_threads:"يحتاج عزل المصدر", diag_wasm_threads_fix:"يستخدم SharedArrayBuffer: فعّل COOP/COEP مع HTTPS.",
+diag_service_worker:"يستخدم Service Worker", diag_service_worker_fix:"الأفضل تشغيله على منفذ خاص كي لا يؤثر على بقية التطبيقات.",
+diag_base_href:"يحدد base href", diag_base_href_fix:"قد يغيّر مكان تحميل الملفات النسبية.", diag_no_index:"ملف البداية غير موجود", diag_no_index_fix:"",
+import_files:"استيراد ملفات منزّلة", import_title:"استيراد ملفات نزّلتها سابقاً", import_hint:"اختر ملفات ZIP (عدة ملفات معاً). يكفي اسم مثل app-v1.2.0.zip: تُكتشف التطبيقات وتُنشأ تلقائياً، وتُثبَّت بدون تنزيل أي شيء، وتُحفظ في الكاش المحلي.",
 col_file:"الملف", col_app:"التطبيق", col_version:"النسخة", import_start:"استيراد", import_done:"تم", import_skip:"متجاوَز", import_pick:"اختر ملفات ZIP", pick_app:"— اختر —",
 cache_title:"التنزيلات المحفوظة (الكاش)", cache_hint:"كل ملف ZIP تنزّله أو ترفعه أو تستورده يُحفظ هنا، فيمكن إعادة تثبيت أي نسخة بدون إنترنت.", cache_empty:"لا توجد ملفات محفوظة.", install_cached:"تثبيت", cached_n:"محفوظ",
-f_auto:"تثبيت التحديثات تلقائياً", last_checked:"آخر فحص", update_now:"تحديث", onboard_title:"هل نزّلت ملفات التطبيقات سابقاً؟", onboard_body:"استوردها الآن: لن يُعاد تنزيل شيء.",
+f_auto:"تثبيت التحديثات تلقائياً", last_checked:"آخر فحص", update_now:"تحديث", onboard_title:"هل نزّلت ملفات التطبيقات سابقاً؟", onboard_body:"بدون أي إعداد: تُنشأ التطبيقات من أسماء الملفات (الاسم + رقم الإصدار) ولن يُعاد تنزيل شيء.",
 auto_every:"فحص التحديثات كل", hours:"ساعة", admin_port:"منفذ اللوحة", cache_keep:"عدد ملفات ZIP المحفوظة لكل تطبيق", off:"متوقف", saved_dl:"التنزيلات المحفوظة"
 }};
 
@@ -94,6 +122,7 @@ function h(tag, props, ...kids) {
   return el;
 }
 const btn = (label, cls, onclick, icon, extra) => h("button", Object.assign({ class: "btn " + (cls || ""), type: "button", onclick }, extra), icon ? ic(icon) : null, label);
+const appUrl = a => location.protocol + "//" + location.hostname + ":" + (a.port || (data && data.server.public_port) || location.port) + (a.port ? "/" : "/" + encodeURIComponent(a.id) + "/");
 const fmtBytes = n => { if (!n) return "0 B"; const u = ["B","KB","MB","GB","TB"]; const i = Math.min(4, Math.floor(Math.log(n) / Math.log(1024))); return (n / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + u[i]; };
 const fmtTime = x => { if (!x) return "—"; const d = typeof x === "number" ? new Date(x * 1000) : new Date(x); return d.toLocaleString(lang === "ar" ? "ar" : "en", { dateStyle: "medium", timeStyle: "short" }); };
 const fmtUp = s => { const d = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + (hh ? hh + "h " : "") + m + "m"; };
@@ -151,7 +180,7 @@ function showJob(id, title) {
   const pre = h("pre", { class: "log" }, "…"), badge = h("span", { class: "badge acc" }, t("running"));
   const m = modal(title, h("div", {}, h("p", { style: { marginTop: 0 } }, badge), pre), null, true);
   let stop = false;
-  m.el.addEventListener("close", () => { stop = true; reload(); });
+  m.el.addEventListener("close", () => { stop = true; diags = {}; httpsInfo = null; reload(); });
   (async function poll() {
     if (stop) return;
     try {
@@ -227,9 +256,10 @@ function appCard(a) {
     h("p", {}, a.description),
     h("div", { class: "row", style: { flexWrap: "wrap", gap: "8px" } },
       a.active ? h("span", { class: "badge ok ltr" }, ic("check"), a.active) : h("span", { class: "badge warn" }, t("not_installed")),
-      !a.enabled ? h("span", { class: "badge" }, "off") : null, updateBadge(a)),
+      !a.enabled ? h("span", { class: "badge" }, "off") : null, a.port ? h("span", { class: "badge acc ltr" }, t("port_word") + " " + a.port) : null,
+      a.port_error ? h("span", { class: "badge bad", title: a.port_error }, t("port_err")) : null, updateBadge(a)),
     h("div", { class: "acts" },
-      a.live ? h("a", { class: "btn sm", href: "/" + encodeURIComponent(a.id) + "/", target: "_blank", rel: "noopener" }, ic("ext"), t("open")) : null,
+      a.live ? h("a", { class: "btn sm", href: appUrl(a), target: "_blank", rel: "noopener" }, ic("ext"), t("open")) : null,
       btn(t("manage"), "sm primary", () => { location.hash = "#/apps/" + encodeURIComponent(a.id); }, "sliders"),
       a.latest && a.latest.update && a.latest.tag ? btn(t("update_now"), "sm primary", () => installTag(a, a.latest.tag), "download") : null,
       a.repo ? btn(t("check_updates"), "sm", () => checkApp(a), "refresh") : null));
@@ -270,9 +300,10 @@ function appForm(a) {
   const chk = (key, label) => { f[key] = h("input", { type: "checkbox", checked: v[key] ? true : null }); return h("label", { class: "chk" }, f[key], label); };
   const body = h("div", {}, field("id", t("f_id"), { disabled: !!a, ltr: true }), field("title", t("f_title")), field("description", t("f_desc")), field("icon", t("f_icon")),
     field("repo", t("f_repo"), { ltr: true, ph: "owner/name" }), field("folder_prefix", t("f_prefix"), { ltr: true, disabled: !!(a && a.versions.length), ph: "myapp-web-" }),
-    field("asset_pattern", t("f_pattern"), { ltr: true }), field("index_path", t("f_index"), { ltr: true }), chk("enabled", t("f_enabled")), chk("prerelease", t("f_pre")), chk("auto_update", t("f_auto")), chk("cross_origin_isolation", t("f_coi")));
+    field("asset_pattern", t("f_pattern"), { ltr: true }), field("index_path", t("f_index"), { ltr: true }), chk("enabled", t("f_enabled")), chk("prerelease", t("f_pre")), chk("auto_update", t("f_auto")), chk("own_port", t("f_ownport")), field("port_config", t("f_port"), { ltr: true, ph: "auto" }), chk("cross_origin_isolation", t("f_coi")));
   modal(a ? t("edit") + ": " + a.title : t("add_app"), body, [{ label: t("cancel"), onclick: () => true }, { label: t("save"), kind: "primary", onclick: async () => {
     const app = {}; for (const k of Object.keys(f)) app[k] = f[k].type === "checkbox" ? f[k].checked : f[k].value;
+    app.port = app.port_config; delete app.port_config;
     if (!app.folder_prefix) delete app.folder_prefix;
     await api("app", { app, original_id: a ? a.id : null }); toast(t("saved")); await reload(); if (!a) location.hash = "#/apps/" + encodeURIComponent(app.id); return true; } }]);
 }
@@ -311,37 +342,70 @@ function uploadCard(a) {
 }
 function cacheCard(a) {
   const total = a.cache.reduce((n, c) => n + c.size, 0);
-  return h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("cache_title")), h("span", { class: "muted" }, a.cache.length + " · " + fmtBytes(total))),
+  return h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("cache_title")), h("span", { class: "muted ltr" }, a.cache.length + " · " + fmtBytes(total))),
     h("div", { class: "bd", style: { paddingBottom: a.cache.length ? "0" : "" } }, h("p", { class: "hint", style: { margin: 0 } }, t("cache_hint"))),
     a.cache.length ? h("div", { class: "tw", style: { marginTop: "14px" } }, h("table", {}, h("tbody", {}, a.cache.map(c => h("tr", {},
-      h("td", { class: "ltr mono" }, c.tag), h("td", { class: "muted" }, fmtBytes(c.size)), h("td", { class: "muted" }, fmtTime(c.mtime)),
+      h("td", { class: "ltr mono" }, c.tag), h("td", { class: "muted ltr" }, fmtBytes(c.size)), h("td", { class: "muted" }, fmtTime(c.mtime)),
       h("td", { class: "r" }, a.versions.some(v => v.tag === c.tag) ? h("span", { class: "badge ok" }, t("installed")) : btn(t("install_cached"), "sm", async () => { try { const r = await api("cache-install", { app: a.id, name: c.name }); showJob(r.job, t("install_cached") + ": " + c.tag); } catch (e) { fail(e); } }, "download"),
         btn("", "sm danger icon", async () => { if (await confirmBox(t("delete_confirm") + " " + c.tag, t("delete"))) { try { await api("cache-delete", { app: a.id, name: c.name }); reload(); } catch (e) { fail(e); } } }, "trash"))))))) : h("div", { class: "empty" }, t("cache_empty")));
 }
 function importDialog() {
   const rows = [], list = h("div", { class: "tw" }), input = h("input", { type: "file", accept: ".zip,application/zip", multiple: true });
   const body = h("div", {}, h("p", { style: { marginTop: 0 } }, t("import_hint")), h("label", { class: "drop" }, ic("upload"), h("div", {}, h("b", {}, t("import_pick"))), input), list);
-  const appSel = () => { const sel = h("select", {}, h("option", { value: "" }, t("pick_app")), data.apps.map(x => h("option", { value: x.id }, x.title))); return sel; };
+  let news = {};
+  const appSel = () => h("select", {}, h("option", { value: "" }, t("pick_app")), data.apps.map(x => h("option", { value: x.id }, x.title)), Object.values(news).map(n => h("option", { value: "+" + n.folder_prefix }, "＋ " + n.title)));
   input.addEventListener("change", async () => {
     const files = Array.from(input.files); rows.length = 0; list.textContent = "";
     let m = []; try { m = (await api("match", { names: files.map(f => f.name) })).matches; } catch (e) { fail(e); }
+    news = {}; m.forEach(x => { if (x.suggest) news[x.suggest.folder_prefix] = x.suggest; });
     const table = h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, t("col_file")), h("th", {}, t("col_app")), h("th", {}, t("col_version")), h("th", {}))), h("tbody", {}));
     files.forEach((f, i) => {
       const sel = appSel(), ver = h("input", { type: "text", dir: "ltr" }), st = h("td", { class: "muted" });
-      sel.value = (m[i] && m[i].app) || ""; ver.value = (m[i] && m[i].tag) || "";
+      sel.value = (m[i] && (m[i].app || (m[i].suggest ? "+" + m[i].suggest.folder_prefix : ""))) || ""; ver.value = (m[i] && m[i].tag) || "";
       rows.push({ f, sel, ver, st });
-      table.lastChild.append(h("tr", {}, h("td", { class: "ltr mono", style: { wordBreak: "break-all" } }, f.name + " (" + fmtBytes(f.size) + ")"), h("td", {}, sel), h("td", {}, ver), st));
+      table.lastChild.append(h("tr", {}, h("td", { style: { wordBreak: "break-all" } }, h("div", { class: "ltr mono" }, f.name), h("div", { class: "muted ltr" }, fmtBytes(f.size))), h("td", {}, sel), h("td", {}, ver), st));
     });
     list.append(table);
   });
   modal(t("import_title"), body, [{ label: t("close"), onclick: () => { reload(); return true; } }, { label: t("import_start"), kind: "primary", onclick: async () => {
+    const made = {};
+    for (const r of rows) {   // apps recognised from the file names are created first
+      const v = r.sel.value; if (!v.startsWith("+") || v in made) continue;
+      const n = news[v.slice(1)]; made[v] = n.id;
+      try { await api("app", { app: { id: n.id, title: n.title, folder_prefix: n.folder_prefix, asset_pattern: n.asset_pattern } }); } catch (e) { if (e.code !== "exists") { made[v] = null; r.st.textContent = errText(e); } }
+    }
     for (const r of rows) {
-      if (!r.sel.value || !r.ver.value.trim()) { r.st.textContent = t("import_skip"); continue; }
+      const appId = r.sel.value.startsWith("+") ? made[r.sel.value] : r.sel.value;
+      if (!appId || !r.ver.value.trim()) { if (!r.st.textContent) r.st.textContent = t("import_skip"); continue; }
       r.st.textContent = "0%";
-      try { await upload(r.f, r.sel.value, r.ver.value.trim(), p => { r.st.textContent = Math.round(p * 100) + "%"; }, "import"); r.st.textContent = "✓ " + t("import_done"); }
+      try { await upload(r.f, appId, r.ver.value.trim(), p => { r.st.textContent = Math.round(p * 100) + "%"; }, "import"); r.st.textContent = "✓ " + t("import_done"); }
       catch (e) { r.st.textContent = errText(e); }
     }
     return false; } }], true);
+}
+let diags = {};
+async function runDiag(a) {
+  diags[a.id] = { loading: true }; render();
+  try { diags[a.id] = await api("diagnose?app=" + encodeURIComponent(a.id)); } catch (e) { diags[a.id] = { error: errText(e) }; }
+  render();
+}
+const saveApp = async (a, changes) => { try { await api("app", { app: Object.assign({}, a, { port: a.port_config || 0 }, changes), original_id: a.id }); toast(t("saved")); await reload(); runDiag(a); } catch (e) { fail(e); } };
+function diagCard(a) {
+  const d = diags[a.id];
+  if (!d && a.active) setTimeout(() => runDiag(a), 0), diags[a.id] = { loading: true };
+  const body = !a.active ? h("div", { class: "empty" }, t("no_versions")) : !d || d.loading ? h("div", { class: "empty" }, h("span", { class: "spin" })) : d.error ? h("div", { class: "empty" }, d.error) :
+    !d.issues.length ? h("div", { class: "bd" }, h("span", { class: "badge ok" }, ic("check"), t("compat_ok"))) :
+    h("div", { class: "tw" }, h("table", {}, h("tbody", {}, d.issues.map(i => h("tr", {},
+      h("td", { style: { width: "1%" } }, h("span", { class: "badge " + (i.severity === "error" ? "bad" : i.severity === "warn" ? "warn" : "acc") }, i.severity)),
+      h("td", {}, h("b", {}, t("diag_" + i.id) + (i.count ? " (" + i.count + ")" : "")), h("div", { class: "muted" }, t("diag_" + i.id + "_fix")),
+        i.items && i.items.length ? h("div", { class: "ltr mono muted", style: { fontSize: "12px", marginTop: "4px", wordBreak: "break-all" } }, i.items.join(" · ")) : null),
+      h("td", { class: "r" },
+        ["root_paths", "service_worker"].includes(i.id) && !d.own_port ? btn(t("own_port_btn"), "sm primary", () => saveApp(a, { own_port: true }), "check") : null,
+        i.id === "external_resources" ? btn(t("make_offline"), "sm primary", async () => { try { const r = await api("localize", { app: a.id }); showJob(r.job, t("make_offline") + ": " + a.title); } catch (e) { fail(e); } }, "download") : null,
+        ["secure_context", "wasm_threads"].includes(i.id) && !d.tls ? btn(t("setup_https_btn"), "sm primary", () => { location.hash = "#/settings"; }, "check") : null,
+        i.id === "wasm_threads" && !d.isolation ? btn(t("coi_btn"), "sm", () => saveApp(a, { cross_origin_isolation: true }), "check") : null))))));
+  const ready = d && d.localized && d.localized.resources ? h("span", { class: "badge ok" }, ic("check"), t("offline_ready") + ": " + d.localized.resources) : null;
+  return h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("compat_title")), ready, a.active ? btn("", "ghost icon", () => runDiag(a), "refresh", { title: t("compat_run") }) : null), body);
 }
 function appDetailPage(a) {
   const c = checks[a.id];
@@ -349,14 +413,14 @@ function appDetailPage(a) {
     h("div", { class: "card", style: { marginBottom: "18px" } }, h("div", { class: "bd" }, h("div", { class: "row", style: { display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" } },
       h("div", { class: "bubble" }, a.icon || "🌐"), h("div", { style: { flex: 1, minWidth: "180px" } }, h("h2", {}, a.title), h("div", { class: "muted" }, a.description || "—")),
       a.active ? h("span", { class: "badge ok ltr" }, ic("check"), a.active) : h("span", { class: "badge warn" }, t("not_installed")), updateBadge(a),
-      a.live ? h("a", { class: "btn sm", href: "/" + encodeURIComponent(a.id) + "/", target: "_blank", rel: "noopener" }, ic("ext"), t("open")) : null,
+      a.live ? h("a", { class: "btn sm", href: appUrl(a), target: "_blank", rel: "noopener" }, ic("ext"), t("open")) : null,
       a.repo ? btn(t("check_updates"), "sm", () => checkApp(a), "refresh") : null,
       btn(t("edit"), "sm", () => appForm(a), "edit"),
       btn(t("remove"), "sm danger", async () => {
         const purge = h("input", { type: "checkbox" });
         if (await confirmBox(t("remove_confirm"), t("remove"), h("label", { class: "chk" }, purge, t("purge")))) { try { await api("app-delete", { id: a.id, purge: purge.checked }); location.hash = "#/apps"; await reload(); } catch (e) { fail(e); } }
       }, "trash")))),
-    h("div", { class: "stack" }, versionsCard(a), h("div", { class: "two" }, githubCard(a), uploadCard(a)), cacheCard(a)));
+    h("div", { class: "stack" }, versionsCard(a), diagCard(a), h("div", { class: "two" }, githubCard(a), uploadCard(a)), cacheCard(a)));
 }
 
 /* ------------------------------------------------------------ activity */
@@ -372,14 +436,39 @@ function activityPage() {
 }
 
 /* ------------------------------------------------------------ settings */
+let httpsInfo = null;
+async function loadHttps() { try { httpsInfo = await api("https-info"); } catch (e) { httpsInfo = { error: errText(e) }; } render(); }
+const TRUST = "Windows (as Administrator):  certutil -addstore -f ROOT certs\\ca.pem\nmacOS:   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/ca.pem\niPhone / iPad:  open the .crt link, install the profile, then Settings > General > About > Certificate Trust Settings\nAndroid:  Settings > Security > Install a certificate > CA certificate\nFirefox:  Settings > Privacy > Certificates > Import";
+function httpsCard() {
+  if (httpsInfo === null) { httpsInfo = { loading: true }; setTimeout(loadHttps, 0); }
+  const i = httpsInfo, names = h("input", { type: "text", dir: "ltr", placeholder: "craft.lan, 192.168.1.20" }), renew = h("input", { type: "checkbox" }), newCa = h("input", { type: "checkbox" });
+  const caUrl = ext => location.protocol + "//" + location.hostname + ":" + (data.server.public_port || location.port) + "/ca." + ext;
+  const status = i.loading ? h("span", { class: "spin" }) : i.active ? h("span", { class: "badge ok" }, ic("check"), t("https_on")) : i.needs_restart ? h("span", { class: "badge warn" }, t("https_restart")) : h("span", { class: "badge" }, t("https_off"));
+  return h("div", { class: "card", style: { maxWidth: "720px" } }, h("div", { class: "hd" }, h("h2", {}, t("https_title")), status), h("div", { class: "bd" },
+    h("p", { class: "hint", style: { marginTop: 0 } }, t("https_hint")),
+    i.exists ? h("dl", { class: "kv" }, h("dt", {}, t("https_names")), h("dd", { class: "ltr" }, i.names.concat(i.ips).join(", ")), h("dt", {}, t("https_expires")), h("dd", { class: "ltr" }, i.days_left + " " + t("days")), h("dt", {}, t("fingerprint")), h("dd", { class: "ltr mono", style: { fontSize: "11px", wordBreak: "break-all" } }, i.ca_sha256 || "—")) : null,
+    i.exists && i.missing_ips && i.missing_ips.length ? h("div", { class: "note", style: { marginTop: "14px" } }, t("https_missing") + i.missing_ips.join(", ")) : null,
+    h("div", { class: "inline", style: { marginTop: "16px" } }, h("label", { class: "f", style: { margin: 0 } }, h("span", {}, t("https_extra")), names),
+      btn(t("https_setup_run"), "primary", async () => { try { const r = await api("https-setup", { names: names.value.split(",").map(x => x.trim()).filter(Boolean), renew: renew.checked, new_ca: newCa.checked }); showJob(r.job, t("https_title")); } catch (e) { fail(e); } }, "check")),
+    h("label", { class: "chk", style: { marginTop: "10px" } }, renew, t("https_renew")),
+    h("label", { class: "chk" }, newCa, t("new_ca")),
+    i.exists ? h("div", { style: { marginTop: "16px" } }, h("h3", { style: { fontSize: "14px", marginBottom: "8px" } }, t("https_ca")),
+      h("div", { class: "acts" }, h("a", { class: "btn sm", href: caUrl("crt") }, ic("download"), t("download_crt")), h("a", { class: "btn sm", href: caUrl("cer") }, ic("download"), t("download_cer"))),
+      h("h3", { style: { fontSize: "14px", margin: "16px 0 8px" } }, t("trust_help")), h("pre", { class: "log" }, TRUST)) : null));
+}
 function settingsPage() {
   const s = data.server, cur = h("input", { type: "password", autocomplete: "current-password" }), nw = h("input", { type: "password", autocomplete: "new-password" });
   const kv = rows => h("dl", { class: "kv" }, rows.map(([k, v]) => [h("dt", {}, k), h("dd", { class: "ltr" }, v)]));
   return h("div", { class: "stack" },
     h("div", { class: "two" },
-      h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("server"))), h("div", { class: "bd" }, kv([[t("version"), "v" + s.version], [t("python"), s.python], [t("host"), s.host + ":" + s.port], [t("uptime"), fmtUp(s.uptime)], [t("max_upload"), s.max_upload_mb + " MB"], [t("admin_port"), String(s.admin_port || "= " + s.port)], [t("auto_every"), s.auto_update_hours ? s.auto_update_hours + " " + t("hours") : t("off")], [t("cache_keep"), s.cache_enabled ? String(s.cache_keep) : t("off")], [t("inbox"), data.inbox.path]]), s.inbox_enabled ? h("p", { class: "hint" }, t("inbox_hint")) : null)),
+      h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("server"))), h("div", { class: "bd" }, kv([[t("version"), "v" + s.version], [t("python"), s.python], [t("host"), s.host + ":" + (s.public_port || s.port)], [t("uptime"), fmtUp(s.uptime)], [t("max_upload"), s.max_upload_mb + " MB"], [t("admin_port"), String(s.admin_port || "= " + s.port)], [t("auto_every"), s.auto_update_hours ? s.auto_update_hours + " " + t("hours") : t("off")], [t("cache_keep"), s.cache_enabled ? String(s.cache_keep) : t("off")], [t("inbox"), data.inbox.path]]), s.inbox_enabled ? h("p", { class: "hint" }, t("inbox_hint")) : null)),
       h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("security"))), h("div", { class: "bd" }, h("div", { class: "note" + (s.tls ? " ok" : "") }, s.tls ? t("tls_on") : t("tls_off")),
         kv([[t("session_idle"), s.session_minutes + " " + t("min")], [t("networks"), s.allowed_networks.join(", ")]])))),
+    h("div", { class: "card", style: { maxWidth: "720px" } }, h("div", { class: "hd" }, h("h2", {}, t("compat_settings"))), h("div", { class: "bd" },
+      [["isolate_apps", t("isolate_all")], ["cross_origin_isolation", t("coi_all")], ["localize_external", t("localize_all")]].map(([key, label]) =>
+        h("label", { class: "chk" }, h("input", { type: "checkbox", checked: s[key] ? true : null, onchange: async ev => { try { await api("settings", { [key]: ev.target.checked }); toast(t("saved")); reload(); } catch (e) { fail(e); ev.target.checked = !ev.target.checked; } } }), label)),
+      h("p", { class: "hint" }, t("isolate_hint")))),
+    httpsCard(),
     h("div", { class: "card", style: { maxWidth: "520px" } }, h("div", { class: "hd" }, h("h2", {}, t("change_password"))), h("div", { class: "bd" },
       h("label", { class: "f" }, h("span", {}, t("current_pw")), cur), h("label", { class: "f" }, h("span", {}, t("new_pw")), nw),
       btn(t("save"), "primary", async () => { try { await api("password", { current: cur.value, new: nw.value }); cur.value = nw.value = ""; toast(t("pw_changed")); } catch (e) { fail(e); } }, "check"))));

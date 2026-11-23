@@ -19,6 +19,10 @@ Craft Web Server is meant for a **trusted internal network**.
 - Strict CSP on the dashboard (no inline script/style); only whitelisted static files are served.
 - Archives are checked for path traversal and size before extraction; GitHub digests (SHA-256)
   are verified when provided; the GitHub token is never sent to another host.
+- Localizing downloads URLs found in third-party app files: private/loopback/link-local targets, ports other than 80/443
+  and redirects to them are refused, and size/count are limited (SSRF protection).
+- HTTPS: the local authority's key never leaves `certs/` (mode 0600, never served); the authority is name-constrained to local
+  names and private networks. Remove the authority from devices when you retire the server.
 - Hosted apps are third-party code served from your server: only install releases you trust.
 
 Out of scope: exposing the server directly to the internet, and TLS termination (use

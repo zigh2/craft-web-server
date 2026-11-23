@@ -37,6 +37,13 @@ DEFAULT_SETTINGS = {
     "cache_keep": 5,            # zips kept per app
     "auto_update_hours": 6,     # how often GitHub is checked (0 = never)
     "access_log": False,
+    # Files named <name>-<version>.zip create their app automatically (no setup needed).
+    "auto_create_apps": True,
+    # Apps that expect to live at the site root ("/assets/...") work best on their own port.
+    "isolate_apps": False,      # True = every app gets its own port (per-app "own_port" overrides)
+    "app_port_base": 8100,      # first port handed out automatically
+    # After an install, download the CDN files / web fonts the app loads so it works offline.
+    "localize_external": True,
 }
 
 DEFAULT_APPS = {
@@ -59,6 +66,7 @@ TAG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 OP_LOCK = threading.Lock()  # one install/update/delete at a time
 
 lock = threading.RLock()
+RUNTIME = {}  # ports the running server really listens on (CLI overrides included)
 
 
 # ---------------------------------------------------------------- paths
@@ -138,6 +146,62 @@ def update_apps(mutator):
         raw.setdefault("settings", {})
         save_json(config_path(), raw)
     invalidate_cache()
+
+
+def update_settings(changes):
+    """Change keys of apps.json -> settings only (everything else is written back untouched)."""
+    with lock:
+        raw = _load_json(config_path(), {})
+        if not isinstance(raw, dict):
+            raw = {}
+        raw.setdefault("settings", {})
+        raw["settings"].update(changes)
+        raw.setdefault("apps", [])
+        save_json(config_path(), raw)
+    invalidate_cache()
+
+
+def desired_ports():
+    """{app id: port} for the apps that run on their own port. Automatic ports are
+    remembered in state.json so an app keeps its port across restarts."""
+    config = load_config()
+    settings = config["settings"]
+    reserved = {int(RUNTIME.get("port", settings["port"])),
+                int(RUNTIME.get("admin_port", settings.get("admin_port") or 0))}
+    explicit, auto = {}, []
+    for app in config["apps"]:
+        app_id = str(app.get("id", "")).lower()
+        if not app_id or app_id in RESERVED_IDS or not app.get("enabled", True):
+            continue
+        port = app.get("port")
+        try:
+            port = int(port) if port else 0
+        except (TypeError, ValueError):
+            port = 0
+        if port:
+            explicit[app_id] = port
+        elif app.get("own_port", settings.get("isolate_apps", False)):
+            auto.append(app_id)
+
+    state = load_state()
+    remembered = state.get("_ports") if isinstance(state.get("_ports"), dict) else {}
+    used = reserved | set(explicit.values())
+    chosen, changed = dict(explicit), False
+    for app_id in auto:
+        port = remembered.get(app_id)
+        if not isinstance(port, int) or port in used:
+            port, changed = int(settings["app_port_base"]), True
+            while port in used or port in remembered.values():
+                port += 1
+            remembered[app_id] = port
+        used.add(port)
+        chosen[app_id] = port
+    if changed:
+        with lock:
+            state = load_state()
+            state["_ports"] = remembered
+            save_state(state)
+    return chosen
 
 
 def load_state():

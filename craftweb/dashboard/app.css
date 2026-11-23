@@ -87,3 +87,4 @@ dialog.modal.wide{width:min(720px,94vw)}dialog::backdrop{background:rgba(8,12,24
 @media(max-width:860px){.shell{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;align-items:center;padding:10px 12px;gap:8px;overflow-x:auto}.brand{padding:0 8px 0 0}.brand small,.side .grow{display:none}.nav{flex-direction:row}.nav a span.t{display:none}.top,.content{padding-inline:16px}.two{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 [dir=rtl] .stat .v,[dir=rtl] .stat .s{direction:ltr;text-align:right;unicode-bidi:isolate}
+.modal.wide td select{min-width:190px}
