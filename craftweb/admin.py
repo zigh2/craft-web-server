@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
 from . import config as cfg
-from . import diagnose, inbox, localize, pki, portmux, scheduler, security, updater
+from . import diagnose, inbox, localize, pki, portmux, scheduler, security, selfupdate, service, syscheck, updater
 
 STATIC_DIR = Path(__file__).parent / "dashboard"
 STATIC_FILES = {
@@ -285,7 +285,7 @@ def _exclusive():
 # ---------------------------------------------------------------- routes
 def r_session(c):
     out = {"authenticated": c.session is not None, "version": __version__,
-           "setup_required": not security.password_hash()}
+           "setup_required": not security.password_hash(), "setup_command": cfg.cli("passwd")}
     if c.session:
         out["csrf"] = c.session["csrf"]
     return out
@@ -343,6 +343,8 @@ def r_overview(c):
             "admin_port": settings["admin_port"], "public_port": cfg.RUNTIME.get("port", settings["port"]),
             "isolate_apps": settings["isolate_apps"], "app_port_base": settings["app_port_base"],
             "localize_external": settings["localize_external"],
+            "self_update": scheduler.SELF or None, "supervised": _supervised(),
+            "self_update_auto": bool(settings.get("self_update_auto")),
             "cross_origin_isolation": settings["cross_origin_isolation"],
             "auto_update_hours": settings["auto_update_hours"],
             "cache_enabled": settings["cache_enabled"], "cache_keep": settings["cache_keep"],
@@ -583,7 +585,51 @@ def r_diagnose(c):
     return result
 
 
-SETTING_KEYS = {"isolate_apps": bool, "cross_origin_isolation": bool, "localize_external": bool}
+SETTING_KEYS = {"isolate_apps": bool, "cross_origin_isolation": bool, "localize_external": bool,
+                "self_update_auto": bool}
+
+
+def _supervised():
+    return os.environ.get("CRAFTWEB_SUPERVISED") == "1"
+
+
+def r_system(c):
+    staged = selfupdate.staged()
+    return {"version": __version__, "supervised": _supervised(), "kind": selfupdate.install_kind(),
+            "data_dir": str(cfg.base_dir()), "program_dir": str(cfg.program_dir()),
+            "uptime": int(time.time() - STARTED), "update": scheduler.SELF or None,
+            "staged": staged["version"] if staged else None, "repo": selfupdate.default_repo(),
+            "auto": bool(c.settings.get("self_update_auto"))}
+
+
+def r_system_check(c):
+    return scheduler.check_self()
+
+
+def r_system_update(c):
+    if not _supervised():
+        raise ApiError(409, "One-click updates need the background service (use the Manager to install it).",
+                       "not_supervised")
+    security.audit(c.ip, "server-update")
+
+    def work():
+        info = selfupdate.check()
+        version = selfupdate.stage(info, updater.say)
+        updater.say("Restarting to finish the update to %s ..." % version)
+        service.set_flag("restart")
+    return {"job": _start_job(c, "Update the server", work)["id"]}
+
+
+def r_system_restart(c):
+    if not _supervised():
+        raise ApiError(409, "Restart needs the background service (use the Manager to install it).", "not_supervised")
+    security.audit(c.ip, "server-restart")
+    service.set_flag("restart")
+    return {"ok": True}
+
+
+def r_doctor(c):
+    return syscheck.run_checks()
 
 
 def r_https_info(c):
@@ -744,6 +790,9 @@ ROUTES = {
     ("GET", "diagnose"): r_diagnose, ("POST", "settings"): r_settings,
     ("POST", "localize"): r_localize,
     ("GET", "https-info"): r_https_info, ("POST", "https-setup"): r_https_setup,
+    ("GET", "system"): r_system, ("POST", "system-check"): r_system_check,
+    ("POST", "system-update"): r_system_update, ("POST", "system-restart"): r_system_restart,
+    ("GET", "doctor"): r_doctor,
     ("POST", "cache-install"): r_cache_install, ("POST", "cache-delete"): r_cache_delete,
 }
 PUBLIC = {"session", "login"}

@@ -1,4 +1,5 @@
-# sudo cp deploy/craft-web.service /etc/systemd/system/
+# Easier: sudo python3 -m craftweb service install   (writes this unit for you, with the right paths)
+# Manual: sudo cp deploy/craft-web.service /etc/systemd/system/
 # edit User and paths, then: sudo systemctl enable --now craft-web
 [Unit]
 Description=Craft Apps web server

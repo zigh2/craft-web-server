@@ -18,7 +18,7 @@ root=$(dirname "$server")
 grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\s*$' "$root/VERSION" || { echo "::error::VERSION must be X.Y.Z"; exit 1; }
 
 # Never take runtime data, the incoming folder or any VCS data from a package.
-rm -rf "$root/.git" "$root/incoming" "$root/root" "$root/downloads" "$root/inbox" "$root/cache" "$root/dist" \
+rm -rf "$root/.git" "$root/incoming" "$root/root" "$root/downloads" "$root/inbox" "$root/cache" "$root/dist" "$root/run" "$root/update" "$root/certs" \
        "$root/logs" "$root/state.json" "$root/admin.json"
 
 # Replace every tracked file except the incoming folder and the workflows, then

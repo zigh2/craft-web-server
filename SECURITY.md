@@ -23,6 +23,11 @@ Craft Web Server is meant for a **trusted internal network**.
   and redirects to them are refused, and size/count are limited (SSRF protection).
 - HTTPS: the local authority's key never leaves `certs/` (mode 0600, never served); the authority is name-constrained to local
   names and private networks. Remove the authority from devices when you retire the server.
+- The Manager listens on 127.0.0.1 only; its link carries a secret, every request must carry the matching cookie, `Host` must be
+  local (DNS rebinding), POSTs need a CSRF token and a matching `Origin`, and it closes itself when idle. It may run elevated, so it
+  only offers a fixed list of actions and reads only whitelisted log files.
+- Self-update: SHA-256 verified, the new program must run and report the expected version before anything is replaced, previous files
+  are kept until the new version is stable. On Windows the data folder is limited to Administrators and SYSTEM.
 - Hosted apps are third-party code served from your server: only install releases you trust.
 
 Out of scope: exposing the server directly to the internet, and TLS termination (use

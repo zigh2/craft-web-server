@@ -14,17 +14,61 @@
 
 ## البدء السريع
 
-اختر طريقة واحدة:
+### ويندوز (الأسهل: بدون Python وبدون أوامر)
+1. نزّل `craft-web-server-vX.Y.Z-windows-x64.zip` من [Releases](../../releases/latest) وفكّه.
+2. انقر مرتين على **`CraftManager.exe`** ووافق على طلب صلاحية المسؤول.
+3. اضغط **«تثبيت وتشغيل في الخلفية»** (واختر كلمة مرور للوحة التحكم أول مرة فقط).
+4. اضغط **«فتح لوحة التحكم»**.
 
-| الطريقة | الأوامر |
+هذا كل شيء: الخادم يعمل في الخلفية، **ويبدأ وحده بعد كل إعادة تشغيل للحاسوب**، ويعيد تشغيل نفسه إن توقف، ويفتح الجدار الناري للشبكة الخاصة.
+> البرنامج غير موقَّع رقمياً، فقد يحذّر SmartScreen أو مضاد الفيروسات: «مزيد من المعلومات» ← «تشغيل على أي حال» (يمكنك مقارنة الملف بـ `SHA256SUMS` في صفحة الإصدار).
+
+### Python (ويندوز أو لينكس)
+```bash
+git clone https://github.com/zigh2/craft-web-server.git && cd craft-web-server
+python -m craftweb manager        # لوحة الإدارة نفسها (ويندوز: start-manager.bat)
+# أو بدون واجهة:
+python server.py --set-admin-password && python server.py
+```
+
+### Docker
+`docker compose up -d` ثم `docker compose exec craft-web-server python -m craftweb passwd`.
+
+## لوحة الإدارة (Manager): تثبيت، تحديث، فحص، إعادة تشغيل
+
+تعمل حتى لو كان الخادم متوقفاً أو غير مثبَّت (لذلك هي برنامج مستقل عن لوحة التحكم). تفتح في المتصفح على `127.0.0.1` فقط، وتغلق نفسها عند الخمول.
+
+| الزر | الوظيفة |
 |---|---|
-| **Python** | `python server.py --set-admin-password` ثم `python server.py` (ويندوز: `set-admin-password.bat` ثم `start-server.bat`) |
-| **ويندوز بدون Python** | نزّل `craft-web-server-vX.Y.Z-windows-x64.zip` من [Releases](../../releases/latest) ثم `craft-web-server.exe passwd` و`craft-web-server.exe` |
-| **Docker** | `docker compose up -d` ثم `docker compose exec craft-web-server python -m craftweb passwd` |
+| **تثبيت وتشغيل في الخلفية** | ينشئ مجلد البيانات الآمن، قاعدة الجدار الناري، ومهمة تبدأ عند الإقلاع (SYSTEM، بلا حد زمني، تعيد التشغيل عند الفشل) ثم يشغّل الخادم |
+| تشغيل / إيقاف / إعادة تشغيل | تحكم مباشر بالخادم |
+| **التحديثات** | يفحص GitHub ويحدّث الخادم نفسه بنقرة واحدة |
+| **فحص كل شيء** | يختبر: مجلد البيانات والقرص وكلمة المرور والمنافذ والتشغيل عند الإقلاع والجدار الناري وعنوان الشبكة وHTTPS والتطبيقات والإنترنت والأخطاء الأخيرة، ويعرض زر إصلاح لما يمكن إصلاحه |
+| السجلات | سجل الخادم ومخرجات الانهيار والنشاط |
+| إزالة التشغيل التلقائي | يزيل المهمة وقاعدة الجدار الناري (البيانات تبقى) |
 
-ثم افتح لوحة التحكم (يُطبع عنوانها عند التشغيل) وسجّل الدخول.
-> ويندوز: اسمح بالمنفذين في الجدار الناري:
-> `netsh advfirewall firewall add rule name="Craft Apps" dir=in action=allow protocol=TCP localport=8080,8081,8100-8199`
+بدون واجهة: `craft-web-server service install|uninstall|start|stop|restart|status` و`craft-web-server doctor` (أو `python -m craftweb ...`).
+الفحص والتحديث والإعادة متاحة أيضاً من لوحة التحكم: **الإعدادات ← النظام والتحديث**.
+
+### بياناتك لا تُمس عند التحديث (ولا تحتاج كلمة مرور جديدة)
+البيانات (كلمة المرور، التطبيقات المثبّتة والكاش والشهادات والإعدادات) محفوظة **خارج مجلد البرنامج**:
+
+| النظام | مكان البيانات |
+|---|---|
+| ويندوز | `C:\ProgramData\CraftWebServer` (لمسؤولي الجهاز فقط) |
+| لينكس/ماك (exe أو حزمة) | `~/.local/share/craft-web-server` |
+| تشغيل من الشيفرة على لينكس | مجلد المشروع (أو أي مكان عبر `CRAFTWEB_HOME`) |
+| Docker | `/data` |
+
+لذلك يكفي استبدال البرنامج أو الضغط على «تحديث»؛ لا إعادة تثبيت ولا إعادة تعريف للتطبيقات. إن وُجدت بيانات من إصدار أقدم داخل مجلد البرنامج تُنقَل تلقائياً (أو زر «انقلها إلى المكان الآمن»).
+لإبقاء كل شيء بجانب البرنامج (نسخة محمولة) أنشئ ملفاً فارغاً باسم `portable.flag` بجانبه.
+
+### كيف يعمل التحديث الذاتي (ولماذا هو آمن)
+1. يُنزَّل ملف الإصدار ويُتحقق من **SHA-256** المنشور؛ بلا checksum يُرفض.
+2. تُشغَّل النسخة الجديدة بالأمر `version` ويجب أن تُبلغ الرقم المتوقع **قبل** استبدال أي شيء.
+3. المراقب (watchdog) يوقف الخادم، يستبدل الملفات (القديمة تبقى بامتداد `.old`)، ثم يشغّل الجديد.
+4. إن بقيت النسخة الجديدة تعمل 30 ثانية تُحذف الملفات القديمة؛ **وإن انهارت مرتين متتاليتين تعود القديمة تلقائياً**.
+الإعداد `self_update_auto` يجعل الخادم يثبّت الإصدارات الجديدة تلقائياً (معطَّل افتراضياً)، و`self_update_repo` يحدد المستودع.
 
 ## عندك ملفات web منزّلة مسبقاً؟ (بدون أي إعداد)
 
@@ -156,6 +200,7 @@ python updater.py --app pdfcraft --rollback      النسخة السابقة
 python updater.py --import PATH...               ملفات منزّلة مسبقاً
 python updater.py --localize [--app NAME]        توطين موارد الإنترنت (يعمل بدون إنترنت)
 python server.py --setup-https [--names a,b]     HTTPS بأمر واحد (python -m craftweb https)
+python -m craftweb manager | doctor | service ...   لوحة الإدارة، فحص كل شيء، الخدمة في الخلفية
 ```
 
 ## الإصدارات على GitHub (تلقائية)
@@ -181,10 +226,11 @@ python server.py --setup-https [--names a,b]     HTTPS بأمر واحد (python
 
 ```
 ├── VERSION  CHANGELOG.md  apps.json  Dockerfile  docker-compose.yml
-├── server.py  updater.py  run.py                 نقاط التشغيل
+├── server.py  updater.py  run.py  manager_run.py نقاط التشغيل
 ├── craftweb/    config · server · admin · security · updater · scheduler · inbox · portmux · diagnose · localize · pki
+│                service · supervisor · selfupdate · syscheck · manager (+ manager_ui/)
 │   └── dashboard/                                واجهة اللوحة (بدون اعتماديات)
-├── root/ cache/ (zips + vendor/) inbox/ logs/ certs/ state.json admin.json   بيانات التشغيل (غير مرفوعة)
+├── (بيانات التشغيل في مجلد البيانات، لا في البرنامج)  root/ cache/ inbox/ logs/ certs/ run/ update/ state.json admin.json
 ├── incoming/                                     تحديثات المشروع نفسه
 ├── tests/   deploy/craft-web-server.service
 └── .github/  workflows · scripts · ISSUE_TEMPLATE · dependabot.yml

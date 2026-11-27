@@ -19,7 +19,8 @@ unzip craft-web-server-v$v.zip && cd craft-web-server
 python server.py --set-admin-password
 python server.py
 \`\`\`
-**Windows**: download \`craft-web-server-v$v-windows-x64.zip\` (no Python needed) when attached below.
+**Windows** (no Python needed): download \`craft-web-server-v$v-windows-x64.zip\`, unzip, double-click \`CraftManager.exe\` and click *Install and start in the background*.
+Existing installs update themselves from the Manager or the dashboard (Settings > System and updates).
 TXT
 if [ -n "$repo" ]; then
   img=$(printf '%s' "$repo" | tr '[:upper:]' '[:lower:]')

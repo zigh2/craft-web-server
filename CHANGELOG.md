@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.0
+### Added
+- **Manager** (`CraftManager.exe`, `python -m craftweb manager`): a simple control panel that works even when the server is not
+  installed or not running. One click installs the server as a background service that starts after every reboot
+  (Windows Task Scheduler as SYSTEM, no time limit, restart on failure, firewall rule for private/domain networks; systemd on Linux),
+  starts/stops/restarts it, updates it, reads the logs and runs a health check. It listens on 127.0.0.1 only, with a secret link,
+  Host/Origin checks, CSRF token, strict CSP and an idle timeout.
+- **Health check** (`doctor`, Manager, dashboard): data folder, disk, settings, password, server, ports, start at boot, watchdog,
+  firewall, network address, HTTPS, apps, internet, recent errors, available update; with fix buttons.
+- **Self-update**: downloads the release, verifies its SHA-256, runs the new version (`version`) before replacing anything,
+  keeps the old files until the new version is stable, and rolls back automatically if it keeps crashing. Dashboard: *Settings > System
+  and updates* (check, update + restart, restart, health) and a banner on the overview; optional `self_update_auto`.
+- **Watchdog** (`supervise`): keeps the server running, restarts it after a crash (growing delay), on request, and after an update.
+- Windows release package now contains `craft-web-server.exe`, `CraftManager.exe` and `README-WINDOWS.txt`.
+
+### Changed
+- **Data lives outside the program folder** (Windows: `C:\ProgramData\CraftWebServer`), so updating or replacing the program never
+  touches the password, apps, cache or certificates. Data from older installs is moved automatically. `portable.flag` keeps the old behaviour.
+- Command hints say `craft-web-server.exe passwd` (not `python server.py ...`) inside the exe.
+
+### Fixed
+- Running the exe printed instructions for the Python version.
+
 ## 1.5.0
 ### Added
 - **Offline-ready apps.** After an install the server downloads the CDN files, web fonts and CSS sub-resources an

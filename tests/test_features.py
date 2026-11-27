@@ -306,13 +306,52 @@ class SchedulerTests(Base):
 
 
 class MiscTests(Base):
-    def test_frozen_base_dir_is_next_to_the_executable(self):
-        os.environ.pop("CRAFTWEB_HOME")
+    def test_data_lives_outside_the_program_folder(self):
+        prog = Path(self.tmp, "program")
+        prog.mkdir()
+        win = {"ProgramData": "C:\\ProgramData"}
+        self.assertEqual(cfg.default_data_dir("nt", win, prog, True), Path("C:\\ProgramData") / "CraftWebServer")
+        self.assertEqual(cfg.default_data_dir("nt", win, prog, False), Path("C:\\ProgramData") / "CraftWebServer")
+        self.assertEqual(cfg.default_data_dir("nt", {}, prog, False), Path("C:\\ProgramData") / "CraftWebServer")
+        self.assertEqual(cfg.default_data_dir("posix", {"XDG_DATA_HOME": "/xdg"}, prog, True),
+                         Path("/xdg/craft-web-server"))
+        self.assertEqual(cfg.default_data_dir("posix", {}, prog, False), prog)     # source tree on Linux
+        (prog / "portable.flag").write_text("")                                      # portable mode
+        self.assertEqual(cfg.default_data_dir("nt", win, prog, True), prog)
+
+    def test_legacy_data_is_moved_once_and_never_overwritten(self):
+        prog, data = Path(self.tmp, "program"), Path(self.tmp, "data")
+        (prog / "root" / "pdfcraft-web-v1").mkdir(parents=True)
+        (prog / "cache").mkdir()
+        (prog / "admin.json").write_text('{"password": "hash"}')
+        (prog / "apps.json").write_text('{"apps": []}')
+        (prog / "server.py").write_text("# the program stays")
+        self.assertEqual(cfg.legacy_data(prog, data), ["admin.json", "apps.json", "root", "cache"])
+        moved = cfg.migrate_legacy(lambda m: None, prog, data)
+        self.assertEqual(sorted(moved), ["admin.json", "apps.json", "cache", "root"])
+        self.assertEqual((data / "admin.json").read_text(), '{"password": "hash"}')
+        self.assertTrue((data / "root" / "pdfcraft-web-v1").is_dir())
+        self.assertTrue((prog / "server.py").exists())
+        self.assertEqual(cfg.migrate_legacy(lambda m: None, prog, data), [])         # nothing left to move
+        (prog / "admin.json").write_text("new")                                       # a stray second copy
+        cfg.migrate_legacy(lambda m: None, prog, data)
+        self.assertEqual((data / "admin.json").read_text(), '{"password": "hash"}')  # never overwritten
+
+    def test_a_fresh_program_folder_has_no_legacy_data(self):
+        prog, data = Path(self.tmp, "program"), Path(self.tmp, "data")
+        (prog / "root").mkdir(parents=True)
+        (prog / "root" / ".gitkeep").write_text("")
+        (prog / "apps.json").write_text("{}")                                         # just the shipped template
+        self.assertEqual(cfg.legacy_data(prog, data), [])
+        self.assertEqual(cfg.legacy_data(prog, prog), [])
+
+    def test_command_hints_match_how_the_program_runs(self):
+        self.assertEqual(cfg.cli("passwd"), "python server.py --set-admin-password")
         sys.frozen = True
         real = sys.executable
         sys.executable = str(Path(self.tmp, "craft-web-server.exe"))
         try:
-            self.assertEqual(cfg.base_dir(), Path(self.tmp).resolve())
+            self.assertEqual(cfg.cli("passwd"), "craft-web-server.exe passwd")
         finally:
             del sys.frozen
             sys.executable = real

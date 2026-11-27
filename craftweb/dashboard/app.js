@@ -25,6 +25,8 @@ jobs:"Operations", audit:"Audit log", time:"Time", action:"Action", detail:"Deta
 server:"Server", python:"Python", host:"Listening on", security:"Security", tls_on:"HTTPS is enabled", tls_off:"HTTPS is off: the admin password travels unencrypted on this network. Set tls_cert and tls_key in apps.json.",
 networks:"Allowed admin networks", session_idle:"Session idle timeout", min:"min", max_upload:"Max upload", change_password:"Change password", current_pw:"Current password", new_pw:"New password (min 10 characters)", pw_changed:"Password changed",
 inbox:"Inbox folder", inbox_hint:"Copy <folder_prefix><version>.zip files here and they are installed automatically.", pending:"Waiting", failed_files:"Failed files", loading:"Loading…", lang_name:"العربية", theme:"Toggle theme",
+sys_title:"System and updates", sys_version:"Installed version", sys_check:"Check for updates", sys_update:"Update the server and restart", sys_restart:"Restart the server", sys_avail:"A new server version is available", sys_latest:"You have the latest version.", sys_offline:"Could not reach GitHub.",
+sys_unsupervised:"One-click update and restart need the background service: install it with the Manager.", sys_auto:"Install new server versions automatically", sys_health:"Check everything", sys_restarting:"The server is restarting… this page reloads by itself.", sys_data:"Data folder", sys_staged:"Downloaded version", sys_restart_q:"Restart the server now? Apps are unavailable for a few seconds.", sys_go:"Go to settings",
 make_offline:"Make offline-ready", offline_ready:"Offline-ready", localize_all:"Download internet resources automatically after each install (the app then works offline)", setup_https_btn:"Set up HTTPS",
 https_title:"HTTPS", https_on:"HTTPS is active", https_restart:"Configured: restart the server to apply it", https_off:"Not set up", https_names:"Valid for", https_expires:"Expires in", days:"days",
 https_missing:"New addresses of this server are not in the certificate: ", https_renew:"Issue a new certificate", https_extra:"Extra names or IPs (comma separated)", https_setup_run:"Set up / update HTTPS",
@@ -68,6 +70,8 @@ jobs:"العمليات", audit:"سجل التدقيق", time:"الوقت", actio
 server:"الخادم", python:"بايثون", host:"يعمل على", security:"الأمان", tls_on:"HTTPS مفعّل", tls_off:"HTTPS متوقف: كلمة المرور تنتقل بدون تشفير داخل الشبكة. فعّل tls_cert وtls_key في apps.json.",
 networks:"الشبكات المسموح لها بالدخول", session_idle:"مهلة الخمول", min:"دقيقة", max_upload:"أقصى حجم رفع", change_password:"تغيير كلمة المرور", current_pw:"كلمة المرور الحالية", new_pw:"كلمة المرور الجديدة (10 أحرف فأكثر)", pw_changed:"تم تغيير كلمة المرور",
 inbox:"مجلد الاستلام", inbox_hint:"انسخ ملفات <البادئة><الإصدار>.zip هنا ليتم تثبيتها تلقائياً.", pending:"بالانتظار", failed_files:"ملفات فاشلة", loading:"جارٍ التحميل…", lang_name:"English", theme:"تبديل المظهر",
+sys_title:"النظام والتحديث", sys_version:"الإصدار المثبّت", sys_check:"فحص التحديثات", sys_update:"تحديث الخادم وإعادة تشغيله", sys_restart:"إعادة تشغيل الخادم", sys_avail:"يوجد إصدار جديد للخادم", sys_latest:"لديك أحدث إصدار.", sys_offline:"تعذّر الوصول إلى GitHub.",
+sys_unsupervised:"التحديث وإعادة التشغيل بنقرة واحدة يحتاجان إلى الخدمة في الخلفية: ثبّتها من لوحة الإدارة (Manager).", sys_auto:"تثبيت إصدارات الخادم الجديدة تلقائياً", sys_health:"فحص كل شيء", sys_restarting:"الخادم يعيد التشغيل… ستُحدَّث هذه الصفحة تلقائياً.", sys_data:"مجلد البيانات", sys_staged:"تم تنزيل الإصدار", sys_restart_q:"إعادة تشغيل الخادم الآن؟ تنقطع التطبيقات لثوانٍ.", sys_go:"إلى الإعدادات",
 make_offline:"جعله يعمل بدون إنترنت", offline_ready:"جاهز للعمل بدون إنترنت", localize_all:"تنزيل موارد الإنترنت تلقائياً بعد كل تثبيت (يعمل التطبيق بعدها بدون إنترنت)", setup_https_btn:"تفعيل HTTPS",
 https_title:"HTTPS", https_on:"HTTPS يعمل", https_restart:"تم الإعداد: أعد تشغيل الخادم للتطبيق", https_off:"غير مفعّل", https_names:"صالحة للعناوين", https_expires:"تنتهي بعد", days:"يوماً",
 https_missing:"عناوين جديدة لهذا الخادم غير موجودة في الشهادة: ", https_renew:"إصدار شهادة جديدة", https_extra:"أسماء أو عناوين إضافية (مفصولة بفاصلة)", https_setup_run:"إعداد / تحديث HTTPS",
@@ -176,11 +180,11 @@ const confirmBox = (msg, label, extra) => new Promise(res => { let done = false;
     [{ label: t("cancel"), onclick: () => { res(false); return true; } }, { label, kind: "danger", onclick: () => { done = true; res(true); return true; } }]);
   m.el.addEventListener("close", () => { if (!done) res(false); }); });
 
-function showJob(id, title) {
+function showJob(id, title, onDone) {
   const pre = h("pre", { class: "log" }, "…"), badge = h("span", { class: "badge acc" }, t("running"));
   const m = modal(title, h("div", {}, h("p", { style: { marginTop: 0 } }, badge), pre), null, true);
   let stop = false;
-  m.el.addEventListener("close", () => { stop = true; diags = {}; httpsInfo = null; reload(); });
+  m.el.addEventListener("close", () => { stop = true; diags = {}; httpsInfo = null; sysInfo = null; reload(); });
   (async function poll() {
     if (stop) return;
     try {
@@ -188,6 +192,7 @@ function showJob(id, title) {
       pre.textContent = job.log.join("\n") || "…"; pre.scrollTop = pre.scrollHeight;
       badge.className = "badge " + (job.status === "done" ? "ok" : job.status === "failed" ? "bad" : "acc");
       badge.textContent = t(job.status);
+      if (job.status === "done" && onDone) onDone();
       if (job.status === "running") setTimeout(poll, 800);
     } catch (e) { pre.textContent = errText(e); }
   })();
@@ -209,7 +214,7 @@ function loginView() {
     catch (e) { err.textContent = errText(e); pw.select(); }
   };
   const card = session && session.setup_required
-    ? h("div", {}, h("h2", { style: { marginBottom: "6px" } }, t("setup_title")), h("p", { class: "muted" }, t("setup_body")), h("code", { class: "cmd" }, "python server.py --set-admin-password"))
+    ? h("div", {}, h("h2", { style: { marginBottom: "6px" } }, t("setup_title")), h("p", { class: "muted" }, t("setup_body")), h("code", { class: "cmd" }, session.setup_command || "python server.py --set-admin-password"))
     : h("form", { onsubmit: submit }, h("label", { class: "f" }, h("span", {}, t("password")), pw), err, h("button", { class: "btn primary", style: { width: "100%", justifyContent: "center" }, type: "submit" }, t("sign_in")));
   return h("div", { class: "login" }, h("div", { class: "card" },
     h("div", { class: "logo" }, h("img", { src: "/admin/static/favicon.svg", alt: "" }), h("h1", {}, "Craft Apps"), h("span", { class: "muted" }, t("admin") + (session && session.version ? " · v" + session.version : ""))),
@@ -274,6 +279,7 @@ function overviewPage() {
       stat(t("uptime"), fmtUp(s.uptime), s.tls ? "HTTPS" : "HTTP"),
       stat(t("version"), "v" + s.version, "Python " + s.python)),
     h("div", { class: "sec" }, h("h2", {}, t("apps")), btn(t("check_all"), "sm", () => data.apps.filter(a => a.repo).forEach(checkApp), "refresh"), btn(t("import_files"), "sm", importDialog, "upload"), btn(t("add_app"), "sm primary", () => appForm(null), "plus")),
+    s.self_update && s.self_update.update ? h("div", { class: "note", style: { display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" } }, h("div", { style: { flex: 1 } }, h("b", {}, t("sys_avail") + ": " + s.self_update.latest), h("div", { class: "ltr" }, "v" + s.version + " → v" + s.self_update.latest)), btn(t("sys_go"), "primary", () => { location.hash = "#/settings"; })) : null,
     apps.length && !apps.some(a => a.active) ? h("div", { class: "note ok", style: { display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" } }, h("div", { style: { flex: 1 } }, h("b", {}, t("onboard_title")), h("div", {}, t("onboard_body"))), btn(t("import_files"), "primary", importDialog, "upload")) : null,
     apps.length ? h("div", { class: "grid" }, apps.map(appCard)) : h("div", { class: "card empty" }, t("no_apps")),
     data.discovered.length ? h("div", { class: "card", style: { marginBottom: "24px" } }, h("div", { class: "hd" }, h("h2", {}, t("discovered"))), h("div", { class: "bd" }, data.discovered.map(d => h("span", { class: "badge acc ltr", style: { marginInlineEnd: "8px" } }, d.id + " · " + d.version)))) : null,
@@ -436,6 +442,33 @@ function activityPage() {
 }
 
 /* ------------------------------------------------------------ settings */
+let sysInfo = null, doctor = null, doctorBusy = false;
+async function loadSystem() { try { sysInfo = await api("system"); } catch (e) { sysInfo = { error: errText(e) }; } render(); }
+function waitForRestart() {
+  toast(t("sys_restarting"));
+  const tick = async () => { try { const r = await fetch("/admin/api/session", { credentials: "same-origin" }); if (r.ok) { location.reload(); return; } } catch (e) {} setTimeout(tick, 2500); };
+  setTimeout(tick, 5000);
+}
+async function runDoctor() { doctorBusy = true; render(); try { doctor = await api("doctor"); } catch (e) { fail(e); } doctorBusy = false; render(); }
+function systemCard() {
+  if (sysInfo === null) { sysInfo = { loading: true }; setTimeout(loadSystem, 0); }
+  const i = sysInfo, u = i.update, can = i.supervised;
+  const badge = i.loading ? h("span", { class: "spin" }) : i.staged ? h("span", { class: "badge warn" }, t("sys_staged") + " " + i.staged)
+    : u && u.error ? h("span", { class: "badge" }, t("sys_offline")) : u && u.update ? h("span", { class: "badge warn ltr" }, t("sys_avail") + ": " + u.latest)
+    : u && u.latest ? h("span", { class: "badge ok" }, ic("check"), t("sys_latest")) : null;
+  const mark = { ok: "✓", warn: "!", fail: "✕", info: "•" };
+  return h("div", { class: "card", style: { maxWidth: "720px" } }, h("div", { class: "hd" }, h("h2", {}, t("sys_title")), badge), h("div", { class: "bd" },
+    i.loading ? null : h("dl", { class: "kv" }, h("dt", {}, t("sys_version")), h("dd", { class: "ltr" }, "v" + i.version + (i.kind ? " (" + i.kind + ")" : "")), h("dt", {}, t("sys_data")), h("dd", { class: "ltr mono", style: { wordBreak: "break-all" } }, i.data_dir || "—")),
+    h("div", { class: "acts", style: { marginTop: "16px" } },
+      btn(t("sys_check"), "", async () => { try { sysInfo.update = await api("system-check", {}); render(); } catch (e) { fail(e); } }, "refresh"),
+      u && u.update ? btn(t("sys_update"), "primary", async () => { try { const r = await api("system-update", {}); showJob(r.job, t("sys_update"), waitForRestart); } catch (e) { fail(e); } }, "download", { disabled: can ? null : true }) : null,
+      btn(t("sys_restart"), "", async () => { if (await confirmBox(t("sys_restart_q"), t("sys_restart"))) { try { await api("system-restart", {}); waitForRestart(); } catch (e) { fail(e); } } }, "undo", { disabled: can ? null : true })),
+    !can && !i.loading ? h("p", { class: "hint" }, t("sys_unsupervised")) : null,
+    h("div", { style: { marginTop: "18px" } }, btn(doctorBusy ? t("loading") : t("sys_health"), "", runDoctor, "check", { disabled: doctorBusy ? true : null }),
+      doctor ? h("ul", { style: { listStyle: "none", margin: "14px 0 0", padding: 0 } }, doctor.checks.map(c => h("li", { style: { display: "flex", gap: "10px", padding: "8px 0", borderTop: "1px solid var(--border)" } },
+        h("span", { class: "badge " + (c.status === "ok" ? "ok" : c.status === "warn" ? "warn" : c.status === "fail" ? "bad" : ""), style: { minWidth: "28px", justifyContent: "center" } }, mark[c.status]),
+        h("div", {}, h("b", {}, c.title), h("div", { class: "muted", dir: "auto", style: { fontSize: "13px" } }, c.detail))))) : null)));
+}
 let httpsInfo = null;
 async function loadHttps() { try { httpsInfo = await api("https-info"); } catch (e) { httpsInfo = { error: errText(e) }; } render(); }
 const TRUST = "Windows (as Administrator):  certutil -addstore -f ROOT certs\\ca.pem\nmacOS:   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/ca.pem\niPhone / iPad:  open the .crt link, install the profile, then Settings > General > About > Certificate Trust Settings\nAndroid:  Settings > Security > Install a certificate > CA certificate\nFirefox:  Settings > Privacy > Certificates > Import";
@@ -465,9 +498,10 @@ function settingsPage() {
       h("div", { class: "card" }, h("div", { class: "hd" }, h("h2", {}, t("security"))), h("div", { class: "bd" }, h("div", { class: "note" + (s.tls ? " ok" : "") }, s.tls ? t("tls_on") : t("tls_off")),
         kv([[t("session_idle"), s.session_minutes + " " + t("min")], [t("networks"), s.allowed_networks.join(", ")]])))),
     h("div", { class: "card", style: { maxWidth: "720px" } }, h("div", { class: "hd" }, h("h2", {}, t("compat_settings"))), h("div", { class: "bd" },
-      [["isolate_apps", t("isolate_all")], ["cross_origin_isolation", t("coi_all")], ["localize_external", t("localize_all")]].map(([key, label]) =>
+      [["isolate_apps", t("isolate_all")], ["cross_origin_isolation", t("coi_all")], ["localize_external", t("localize_all")], ["self_update_auto", t("sys_auto")]].map(([key, label]) =>
         h("label", { class: "chk" }, h("input", { type: "checkbox", checked: s[key] ? true : null, onchange: async ev => { try { await api("settings", { [key]: ev.target.checked }); toast(t("saved")); reload(); } catch (e) { fail(e); ev.target.checked = !ev.target.checked; } } }), label)),
       h("p", { class: "hint" }, t("isolate_hint")))),
+    systemCard(),
     httpsCard(),
     h("div", { class: "card", style: { maxWidth: "520px" } }, h("div", { class: "hd" }, h("h2", {}, t("change_password"))), h("div", { class: "bd" },
       h("label", { class: "f" }, h("span", {}, t("current_pw")), cur), h("label", { class: "f" }, h("span", {}, t("new_pw")), nw),

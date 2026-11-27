@@ -112,10 +112,24 @@ jobs:
         run: |
           echo "$VERSION" > VERSION
           pip install "pyinstaller>=6,<7"
+          # craft-web-server.exe: console program (server, watchdog, command line)
           pyinstaller --noconfirm --onefile --name craft-web-server \
-            --add-data "craftweb/dashboard;craftweb/dashboard" --add-data "VERSION;." run.py
+            --add-data "craftweb/dashboard;craftweb/dashboard" --add-data "craftweb/manager_ui;craftweb/manager_ui" \
+            --add-data "VERSION;." run.py
+          # CraftManager.exe: the simple control panel (window, asks for administrator rights)
+          pyinstaller --noconfirm --onefile --noconsole --uac-admin --name CraftManager \
+            --add-data "craftweb/manager_ui;craftweb/manager_ui" --add-data "VERSION;." manager_run.py
           ./dist/craft-web-server.exe version
           ./dist/craft-web-server.exe serve --help > /dev/null
+      - name: Smoke test the Manager
+        continue-on-error: true
+        shell: bash
+        run: |
+          export CRAFTWEB_HOME="$RUNNER_TEMP/cws-smoke"
+          ./dist/CraftManager.exe --no-browser --port 18099 &
+          sleep 8
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18099/)
+          [ "$code" = "403" ] || { echo "Manager answered HTTP $code instead of 403"; exit 1; }
       - name: Package and upload
         shell: bash
         env:
@@ -123,7 +137,8 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           name="craft-web-server-v$VERSION-windows-x64"
-          mkdir "$name" && cp dist/craft-web-server.exe LICENSE README.md "$name/"
+          mkdir "$name"
+          cp dist/craft-web-server.exe dist/CraftManager.exe LICENSE README.md deploy/README-WINDOWS.txt "$name/"
           7z a "$name.zip" "$name" > /dev/null
           sha256sum "$name.zip" > "$name.zip.sha256"
           gh release upload "v$VERSION" "$name.zip" "$name.zip.sha256" --clobber

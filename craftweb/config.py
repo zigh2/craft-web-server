@@ -6,6 +6,8 @@
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -44,6 +46,8 @@ DEFAULT_SETTINGS = {
     "app_port_base": 8100,      # first port handed out automatically
     # After an install, download the CDN files / web fonts the app loads so it works offline.
     "localize_external": True,
+    "self_update_repo": "zigh2/craft-web-server",   # where the server looks for its own new versions
+    "self_update_auto": False,                      # install new server versions by itself (needs the watchdog)
 }
 
 DEFAULT_APPS = {
@@ -70,15 +74,133 @@ RUNTIME = {}  # ports the running server really listens on (CLI overrides includ
 
 
 # ---------------------------------------------------------------- paths
-def base_dir():
-    """Data folder: $CRAFTWEB_HOME, else next to the executable (frozen build),
-    else the project folder."""
-    env = os.environ.get("CRAFTWEB_HOME")
-    if env:
-        return Path(env).resolve()
+def program_dir():
+    """Where the program itself lives (the folder of the exe, or of the source tree)."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parents[1]
+
+
+def server_program():
+    """The program that runs the server. In a frozen build the Manager is a different exe, so this is
+    craft-web-server.exe next to it; otherwise it is simply this program."""
+    exe = Path(sys.executable)
+    if getattr(sys, "frozen", False) and exe.stem.lower() != "craft-web-server":
+        sibling = exe.with_name("craft-web-server" + exe.suffix)
+        if sibling.exists():
+            return sibling
+    return exe
+
+
+def default_data_dir(system=None, env=None, program=None, frozen=None):
+    """Where the DATA lives (password, apps, installed versions, cache, certificates).
+
+    It is deliberately NOT the program folder, so that replacing/updating the program never
+    touches it:  Windows -> C:\\ProgramData\\CraftWebServer ; frozen on Linux/macOS -> ~/.local/share ;
+    source tree on Linux/macOS -> the project folder. A file `portable.flag` next to the program
+    keeps everything in the program folder."""
+    system = system or os.name
+    env = os.environ if env is None else env
+    program = Path(program) if program else program_dir()
+    frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    if (program / "portable.flag").exists():
+        return program
+    if system == "nt":
+        return Path(env.get("ProgramData") or env.get("ALLUSERSPROFILE") or "C:\\ProgramData") / "CraftWebServer"
+    if frozen:
+        return Path(env.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share")) / "craft-web-server"
+    return program
+
+
+_default_dir = {}
+
+
+def base_dir():
+    """Data folder: $CRAFTWEB_HOME, else default_data_dir()."""
+    env = os.environ.get("CRAFTWEB_HOME")
+    if env:
+        return Path(env).resolve()
+    if "dir" not in _default_dir:
+        _default_dir["dir"] = default_data_dir()
+    return _default_dir["dir"]
+
+
+def is_admin():
+    """True when running as Administrator (Windows) or root (elsewhere)."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        return os.geteuid() == 0
+    except (AttributeError, OSError):
+        return False
+
+
+def run_dir():
+    """Control files shared by the supervisor, the manager and the server (pid files, flags)."""
+    return base_dir() / "run"
+
+
+def ensure_data_dir():
+    """Create the data folder; on Windows, when running elevated, limit it to Administrators and
+    SYSTEM (it holds the admin password hash and the certificate authority key)."""
+    folder = base_dir()
+    created = not folder.exists()
+    folder.mkdir(parents=True, exist_ok=True)
+    if created and os.name == "nt" and is_admin() and not os.environ.get("CRAFTWEB_HOME"):
+        try:   # SIDs instead of names: works on every Windows language
+            subprocess.run(["icacls", str(folder), "/inheritance:r", "/grant:r",
+                            "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F"],
+                           capture_output=True, timeout=30, creationflags=0x08000000)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return folder
+
+
+_LEGACY_ITEMS = ("admin.json", "state.json", "apps.json", "root", "cache", "certs", "inbox")
+
+
+def legacy_data(program=None, data=None):
+    """Data a previous version left inside the program folder (nothing if it is the data folder)."""
+    program, data = Path(program or program_dir()), Path(data or base_dir())
+    if program.resolve() == data.resolve():
+        return []
+    root = program / "root"
+    used = (program / "admin.json").is_file() or (
+        root.is_dir() and any(p.name != ".gitkeep" for p in root.iterdir()))
+    if not used:
+        return []
+    return [n for n in _LEGACY_ITEMS if (program / n).exists()]
+
+
+def migrate_legacy(log=print, program=None, data=None):
+    """Move data from the program folder to the data folder (once; never overwrites)."""
+    if os.environ.get("CRAFTWEB_HOME") and program is None:
+        return []
+    program, data = Path(program or program_dir()), Path(data or base_dir())
+    names = legacy_data(program, data)
+    if not names:
+        return []
+    data.mkdir(parents=True, exist_ok=True)
+    moved = []
+    for name in names:
+        if (data / name).exists():
+            log("Data folder already has %s: leaving the old copy in %s" % (name, program))
+            continue
+        shutil.move(str(program / name), str(data / name))
+        moved.append(name)
+    if moved:
+        log("Moved your data to %s: %s" % (data, ", ".join(moved)))
+    return moved
+
+
+def cli(command):
+    """The command line a user should type for `command` (passwd, https, serve, update, manager)."""
+    if getattr(sys, "frozen", False):
+        return "%s %s" % (server_program().name, command)
+    return {"passwd": "python server.py --set-admin-password", "https": "python server.py --setup-https",
+            "serve": "python server.py", "update": "python updater.py",
+            "manager": "python -m craftweb manager"}.get(command, "python -m craftweb " + command)
 
 
 def cache_dir():
@@ -118,6 +240,7 @@ def _load_json(path, default):
 
 def save_json(path, data):
     with lock:
+        path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(path.name + ".tmp")
         tmp.write_text(
             json.dumps(data, indent=2, ensure_ascii=False) + "\n",

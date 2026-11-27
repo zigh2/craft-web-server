@@ -400,6 +400,8 @@ def main(argv=None):
     parser.add_argument("--names", help="with --setup-https: extra host names / IPs, comma separated")
     args = parser.parse_args(argv)
 
+    cfg.migrate_legacy(print)
+    cfg.ensure_data_dir()
     cfg.ensure_default_config()
     if args.setup_https:
         return pki.main((["--names", args.names] if args.names else []))
@@ -461,7 +463,7 @@ def main(argv=None):
         if getattr(public, "admin_shared", False):
             print("         WARNING: dashboard shares the apps port; set admin_port to isolate it")
         if not security.password_hash():
-            print("         (no password yet - run: python server.py --set-admin-password)")
+            print("         (no password yet - run: %s)" % cfg.cli("passwd"))
     print("=" * 56)
 
     if settings.get("inbox_enabled", True):

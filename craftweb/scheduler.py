@@ -1,13 +1,15 @@
 """Background checks against GitHub, with optional automatic installation."""
 import logging
+import os
 import threading
 import time
 
 from . import config as cfg
-from . import security, updater
+from . import selfupdate, security, service, updater
 
 LOG = logging.getLogger("craftweb")
 LATEST = {}  # app id -> {"tag", "update", "checked", "error"}
+SELF = {}    # the server's own update status
 _lock = threading.Lock()
 wake = threading.Event()
 
@@ -58,10 +60,30 @@ def _auto_install(app, tag):
         cfg.OP_LOCK.release()
 
 
+def check_self(install=False):
+    """Is there a newer version of the server itself? Optionally install it (needs the watchdog)."""
+    info = selfupdate.check()
+    entry = {k: v for k, v in info.items() if k != "release"}
+    entry["checked"] = int(time.time())
+    SELF.clear()
+    SELF.update(entry)
+    if install and info["update"] and info["supported"] and os.environ.get("CRAFTWEB_SUPERVISED") == "1" \
+            and not selfupdate.staged():
+        try:
+            selfupdate.stage(info, lambda m: LOG.info("self-update: %s", m))
+            security.audit("auto-update", "server-update", info["latest"])
+            service.set_flag("restart")
+        except Exception as exc:  # noqa: BLE001
+            security.audit("auto-update", "server-update-failed", str(exc)[:200])
+            LOG.warning("server self-update failed: %s", exc)
+    return entry
+
+
 def check_all():
     for app in cfg.load_config()["apps"]:
         if app.get("enabled", True) and app.get("id") and app.get("repo") and app.get("folder_prefix"):
             check_app(app, install=bool(app.get("auto_update")))
+    check_self(install=bool(cfg.load_config()["settings"].get("self_update_auto")))
 
 
 def snapshot():
